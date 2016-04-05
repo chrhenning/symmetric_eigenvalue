@@ -6,12 +6,6 @@ OBJS = $(OBJS_LIBS) $(wildcard src/*.c) $(wildcard src/*.h)
 CC = gcc
 CC_MPI = mpiicc
 
-#COMPILER_FLAGS specifies the additional compilation options we're using 
-# -w suppresses all warnings 
-COMPILER_FLAGS =  -w -O3
-COMPILER_FLAGS_CC = $(COMPILER_FLAGS) -fopenmp
-COMPILER_FLAGS_CC_MPI = $(COMPILER_FLAGS) -openmp
-
 #OBJ_NAME specifies the name of our exectuable 
 OBJ_NAME = cuppens
 

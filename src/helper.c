@@ -1,6 +1,7 @@
 #include "helper.h"
 
 #include <stdlib.h>
+#include <omp.h>
 
 double* createMatrixScheme1(int n) {
     double* T = malloc(3*n * sizeof(double));
@@ -8,6 +9,7 @@ double* createMatrixScheme1(int n) {
     double diagSpacing = (100.0-1.0) / (n-1);
 
     int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) {
         T[i*3 + 0] = -1; // sub diagonal
         T[i*3 + 1] = 1.0 + i * diagSpacing;
