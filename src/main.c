@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "helper.h">
+
 void showHelp();
 
 int main (int argc, char **argv)
@@ -80,6 +82,40 @@ int main (int argc, char **argv)
 
     if (outputfile != NULL)
         printf("Output file: %s\n", outputfile);
+
+
+    // ///////////////////////////
+    // read or create matrix T
+    // ///////////////////////////
+
+    /*
+     * How to store the matrix?
+     *
+     * Since this program only deals with tridiagonal matrices as input matrices, we store them as a special case of
+     * Intel's banded matrix scheme (https://software.intel.com/en-us/node/520871)
+     * A tridiagonal matrix has one sub- and one superdiagonal. So we store it in row-major layout as an n x 3 array.
+     */
+    double* T = NULL;
+
+    if (inputfile != NULL) { // read matrix from file
+        return 1;
+    } else {
+        switch (usedScheme) {
+        case 1:
+            T = createMatrixScheme1(n);
+            break;
+        case 2:
+            T = createMatrixScheme2(n);
+            break;
+        }
+    }
+
+    free(T);
+
+
+
+
+
 
     return 0;
 }
