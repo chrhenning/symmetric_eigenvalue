@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "helper.h">
+#include "helper.h"
+#include "filehandling.h"
 
 void showHelp();
 
@@ -98,7 +99,7 @@ int main (int argc, char **argv)
     double* T = NULL;
 
     if (inputfile != NULL) { // read matrix from file
-        return 1;
+        readTriadiagonalMatrixFromSparseMTX(inputfile, T, &n);
     } else {
         switch (usedScheme) {
         case 1:

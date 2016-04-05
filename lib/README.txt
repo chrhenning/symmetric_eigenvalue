@@ -1,0 +1,1 @@
+This folder is for files with external code, that was not written by us.

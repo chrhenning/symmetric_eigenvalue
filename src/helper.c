@@ -2,11 +2,6 @@
 
 #include <stdlib.h>
 
-/**
- * @brief createMatrixScheme1 Create a tridiagonal matrix with rows [-1,d_i,-1] where the d_i are evenly spaced in the interval [1,100]
- * @param n Dimension of matrix
- * @return Returns the created matrix in banded row-major format.
- */
 double* createMatrixScheme1(int n) {
     double* T = malloc(3*n * sizeof(double));
 

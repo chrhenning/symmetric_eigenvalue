@@ -1,5 +1,6 @@
 #OBJS specifies which files to compile as part of the project 
-OBJS = $(wildcard src/*.c) $(wildcard src/*.h)
+OBJS_LIBS = $(wildcard lib/*.c) $(wildcard lib/*.h) 
+OBJS = $(OBJS_LIBS) $(wildcard src/*.c) $(wildcard src/*.h)
 
 #CC specifies which compiler we're using 
 CC = gcc
