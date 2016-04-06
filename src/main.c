@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <omp.h>
+#include <assert.h>
 #include "mpi.h"
 #include "mkl.h"
 
@@ -21,6 +22,7 @@ int main (int argc, char **argv)
 
     int numtasks, taskid, len;
     char hostname[MPI_MAX_PROCESSOR_NAME];
+    MPI_Status status;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
@@ -37,6 +39,9 @@ int main (int argc, char **argv)
 
     // name of output file
     char* outputfile = NULL;
+
+    // some indices to use in for loops
+    int i,j,k;
 
     if (taskid == MASTER) {
         // ///////////////////////////
@@ -128,6 +133,14 @@ int main (int argc, char **argv)
         if (inputfile != NULL) { // read matrix from file
             if (readTriadiagonalMatrixFromSparseMTX(inputfile, T, &n) != 0)
                 MPI_ABORT(MPI_COMM_WORLD, 2);
+            // check that matrix is symmetric
+            #pragma omp parallel for default(shared) private(i) schedule(static)
+            for (i = 0; i < n-1; ++i) {
+                if (T[(i+1)*3 + 0] != T[i*3 + 2]) {
+                    fprintf (stderr, "Input matrix is not symmetric.\n");
+                    MPI_ABORT(MPI_COMM_WORLD, 2);
+                }
+            }
         } else {
             switch (usedScheme) {
             case 1:
@@ -148,14 +161,90 @@ int main (int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
 
     // ///////////////////////////
+    // ///////////////////////////
     // Cuppen's Algorithm to obtain all eigenpairs
+    // ///////////////////////////
     // ///////////////////////////
 
     double tic = omp_get_wtime();
 
     MPI_Bcast(&n,1,MPI_INT,MASTER,MPI_COMM_WORLD);
 
-    //free(T);
+    // ///////////////////////////
+    // Divide phase
+    // ///////////////////////////
+    /*
+     * The goal of the divide phase is to create a binary tree which is as balanced as possible and contains nearly equal sized leaves.
+     *
+     * Here is how the splitting works: let p = 7 (numtasks) (smallest power of two greater than 7 is 8)
+     * In the first stage, only the task with (taskid % 8 == 0) should perform a split (which is the MASTER).
+     * it should send the result to taskid + 8/2 => 4
+     *
+     * In the second stage, only tasks with taskid 8/2 = 4 should perform a split => 0, 4.
+     * The results are send to nodes with taskid: sender_taskid+4/2 => 2, 6
+     *
+     * In the third stage, only tasks with taskid 4/2 = 2 should perform a split => 0, 2, 4, 6. (6 can't perform a split)
+     * The results are send to nodes with taskid: sender_taskid+2/2 => 1,2,3,4,5,6,7
+     *
+     * Note, since 2^(k-1) < p <= 2^k, the minimum depth of each binary tree is k. Our tree will always have depth k.
+     */
+
+    // stage in divide tree
+    int s = 0;
+    // all tasks that have zero remainder when computing (taskid % modulus) do a split in the current stage
+    // find smallest power of two greater than numtasks
+    int modulus = 1;
+    while (modulus < numtasks)
+        modulus *= 2;
+    // Note, our goal is to have equally sized leaves
+    int leafSize, sizeRemainder;
+    if (taskid == 0) {
+        leafSize = n / numtasks; // FIXME: if leaf size is too small, we have to use less nodes for computation
+        sizeRemainder = n % numtasks;
+    }
+    MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    // size of T in left resp. right subtree
+    int n1,n2;
+    // number of leaves in the right subtree
+    int numLeavesRight;
+
+    for (s = 0; modulus > 1; s++) {
+
+        // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
+        if (taskid % modulus == 0) {
+            // Compute size of left and right subtree depending on the number of childrens in this tree.
+            // The left subtree will always be a fully balanced tree (so it will have modulus/2 leaves).
+            // The right subtree has min(numtasks-(taskid+modulus/2) , modulus/2) leaves.
+            numLeavesRight = min(numtasks-(taskid+modulus/2), modulus/2);
+
+            n1 = modulus/2 * leafSize;
+            n2 = numLeavesRight * leafSize;
+
+            // split the remaining lines equally on the leaves
+            n1 += max(0, min(sizeRemainder-taskid, modulus/2));
+            n2 += max(0, min(sizeRemainder-(taskid+modulus/2), numLeavesRight));
+
+            //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, taskid + modulus/2, n2);
+
+            // send size and second half of matrix
+            MPI_Send(&n2, 1, MPI_INT, taskid + modulus/2, 1, MPI_COMM_WORLD);
+            MPI_Send(T+n1*3, n2*3, MPI_DOUBLE, taskid + modulus/2, 2, MPI_COMM_WORLD);
+        }
+
+        // if task es receiver of a subtree in this step
+        if (taskid % modulus != 0 && taskid % (modulus/2) == 0) {
+            // receive size of matrix to receive
+            MPI_Recv(&n, 1, MPI_INT, taskid-modulus/2, 1, MPI_COMM_WORLD, &status);
+
+            // receive matrix
+            assert(T == NULL);
+            T = malloc(n*3 * sizeof(double));
+            MPI_Recv(T, n*3, MPI_DOUBLE, taskid-modulus/2, 2, MPI_COMM_WORLD, &status);
+        }
+
+        modulus /= 2;
+    }
 
 
     // ///////////////////////////
@@ -165,6 +254,8 @@ int main (int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     double toc = omp_get_wtime();
     if (taskid == MASTER) {
+        free(T);
+
         printf("\n");
         printf("Elapsed time in %f seconds\n", toc-tic);
 
