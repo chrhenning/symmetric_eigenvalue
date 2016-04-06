@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "../lib/mmio.h"
 
-void readTriadiagonalMatrixFromSparseMTX(const char* filename, double* T, int* n) {
+int readTriadiagonalMatrixFromSparseMTX(const char* filename, double* T, int* n) {
     int ret_code;
     MM_typecode matcode;
     FILE *f;
@@ -14,13 +14,13 @@ void readTriadiagonalMatrixFromSparseMTX(const char* filename, double* T, int* n
 
     if ((f = fopen(filename, "r")) == NULL) {
         fprintf(stderr, "Could not open file\n");
-        exit(1);
+        return -1;
     }
 
     if (mm_read_banner(f, &matcode) != 0)
     {
         printf("Could not process Matrix Market banner.\n");
-        exit(1);
+        return -1;
     }
 
     /*  This is how one can screen matrix types if their application */
@@ -31,17 +31,17 @@ void readTriadiagonalMatrixFromSparseMTX(const char* filename, double* T, int* n
     {
         printf("Sorry, this application does not support ");
         printf("Market Market type: [%s]\n", mm_typecode_to_str(matcode));
-        exit(1);
+        return -1;
     }
 
     /* find out size of matrix .... */
 
     if ((ret_code = mm_read_mtx_crd_size(f, &R, &C, &NNZ)) !=0)
-        exit(1);
+        return -1;
 
     if (R != C) {
         printf("Matrix is not square\n");
-        exit(1);
+        return -1;
     }
 
     *n = R;
@@ -58,10 +58,12 @@ void readTriadiagonalMatrixFromSparseMTX(const char* filename, double* T, int* n
         fscanf(f, "%d %d %lg\n", &r, &c, &v);
         if (r-c > 1 || c-r > 1) {
             printf("Matrix is not tridiagonal\n");
-            exit(1);
+            return -1;
         }
         T[(r-1)*3 + (c-1)] = v;
     }
 
     if (f !=stdin) fclose(f);
+
+    return 0;
 }

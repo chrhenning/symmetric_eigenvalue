@@ -10,6 +10,6 @@
  *
  * Note, the matrix has to be a square matrix
  */
-void readTriadiagonalMatrixFromSparseMTX(const char* filename, double *T, int *n);
+int readTriadiagonalMatrixFromSparseMTX(const char* filename, double *T, int *n);
 
 #endif // FILEHANDLING_H
