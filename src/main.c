@@ -34,8 +34,9 @@ int main (int argc, char **argv)
 
     // size of tridiagonal matrix
     int n;
-    // tridiagonal matrix
-    double* T = NULL;
+    // symmetric tridiagonal matrix T is splitted into diagonal elements D and off-diagonal elements E
+    double* D = NULL; // diagonal elements
+    double* E = NULL; // off diagonal elements
 
     // name of output file
     char* outputfile = NULL;
@@ -125,35 +126,34 @@ int main (int argc, char **argv)
         /*
          * How to store the matrix?
          *
-         * Since this program only deals with tridiagonal matrices as input matrices, we store them as a special case of
-         * Intel's banded matrix scheme (https://software.intel.com/en-us/node/520871)
-         * A tridiagonal matrix has one sub- and one superdiagonal. So we store it in row-major layout as an n x 3 array.
+         * Since this program only deals with symm. tridiagonal matrices as input matrices, we store them as a special case of
+         * Intel's packed matrix scheme .
+         * A symmetric tridiagonal matrix has the same sub- and superdiagonal. So we store it in row-major layout as an n array
+         * of diagonal elements and an (n-1) array of off-diagonal elements.
          */
 
         if (inputfile != NULL) { // read matrix from file
-            if (readTriadiagonalMatrixFromSparseMTX(inputfile, T, &n) != 0)
+            if (readSymmTriadiagonalMatrixFromSparseMTX(inputfile, &D, &E, &n) != 0)
                 MPI_ABORT(MPI_COMM_WORLD, 2);
-            // check that matrix is symmetric
-            #pragma omp parallel for default(shared) private(i) schedule(static)
-            for (i = 0; i < n-1; ++i) {
-                if (T[(i+1)*3 + 0] != T[i*3 + 2]) {
-                    fprintf (stderr, "Input matrix is not symmetric.\n");
-                    MPI_ABORT(MPI_COMM_WORLD, 2);
-                }
-            }
         } else {
             switch (usedScheme) {
             case 1:
-                T = createMatrixScheme1(n);
+                createMatrixScheme1(&D, &E, n);
                 break;
             case 2:
-                T = createMatrixScheme2(n);
+                createMatrixScheme2(&D, &E, n);
                 break;
             }
         }
 
         printf("\n");
         printf("Number of MPI tasks is: %d\n", numtasks);
+
+        for (i = 0; i < n-1; ++i) {
+            assert(D[i] != 0);
+            assert(E[i] != 0);
+        }
+        assert(D[n-1] != 0);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -187,6 +187,16 @@ int main (int argc, char **argv)
      * The results are send to nodes with taskid: sender_taskid+2/2 => 1,2,3,4,5,6,7
      *
      * Note, since 2^(k-1) < p <= 2^k, the minimum depth of each binary tree is k. Our tree will always have depth k.
+     */
+
+    /*
+     * How to split the matrix. Assume:
+     * D = [1,2,3,4,5,6,7,8]
+     * E = [a,b,c,d,e,f,g]
+     * If we want to split between 4 and 5, the we want to have the following matrices
+     * E1 = [a,b,c], E2 = [e,f,g]
+     * The off diagonal element d would be the beta, which we have to eliminate in the splitting process.
+     * So, the indices of the off-diagonals in the splitted matrix have the same start index as the diagonal elements but have one less element
      */
 
     // stage in divide tree
@@ -229,7 +239,8 @@ int main (int argc, char **argv)
 
             // send size and second half of matrix
             MPI_Send(&n2, 1, MPI_INT, taskid + modulus/2, 1, MPI_COMM_WORLD);
-            MPI_Send(T+n1*3, n2*3, MPI_DOUBLE, taskid + modulus/2, 2, MPI_COMM_WORLD);
+            MPI_Send(D+n1, n2, MPI_DOUBLE, taskid + modulus/2, 2, MPI_COMM_WORLD);
+            MPI_Send(E+n1, n2-1, MPI_DOUBLE, taskid + modulus/2, 3, MPI_COMM_WORLD);
         }
 
         // if task es receiver of a subtree in this step
@@ -238,14 +249,23 @@ int main (int argc, char **argv)
             MPI_Recv(&n, 1, MPI_INT, taskid-modulus/2, 1, MPI_COMM_WORLD, &status);
 
             // receive matrix
-            assert(T == NULL);
-            T = malloc(n*3 * sizeof(double));
-            MPI_Recv(T, n*3, MPI_DOUBLE, taskid-modulus/2, 2, MPI_COMM_WORLD, &status);
+            assert(D == NULL && E == NULL);
+            D = malloc(n * sizeof(double));
+            E = malloc((n-1) * sizeof(double));
+            MPI_Recv(D, n, MPI_DOUBLE, taskid-modulus/2, 2, MPI_COMM_WORLD, &status);
+            MPI_Recv(E, n-1, MPI_DOUBLE, taskid-modulus/2, 3, MPI_COMM_WORLD, &status);
         }
 
         modulus /= 2;
     }
 
+    // TODO: set betas to null, but keep them, as well as the size of the leaves
+
+    // ///////////////////////////
+    // Compute eigenpairs of leaves using QR algorithm
+    // ///////////////////////////
+
+    // steqr
 
     // ///////////////////////////
     // End of algorithm
@@ -254,7 +274,8 @@ int main (int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     double toc = omp_get_wtime();
     if (taskid == MASTER) {
-        free(T);
+        free(D);
+        free(E);
 
         printf("\n");
         printf("Elapsed time in %f seconds\n", toc-tic);

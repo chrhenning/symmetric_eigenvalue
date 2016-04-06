@@ -3,27 +3,21 @@
 #include <stdlib.h>
 #include <omp.h>
 
-double* createMatrixScheme1(int n) {
-    double* T = malloc(3*n * sizeof(double));
+void createMatrixScheme1(double** D, double** E, int n) {
+    *D = malloc(n * sizeof(double));
+    *E = malloc((n-1) * sizeof(double));
 
     double diagSpacing = (100.0-1.0) / (n-1);
 
     int i;
     #pragma omp parallel for default(shared) private(i) schedule(static)
-    for (i = 0; i < n; ++i) {
-        T[i*3 + 0] = -1; // sub diagonal
-        T[i*3 + 1] = 1.0 + i * diagSpacing;
-        T[i*3 + 2] = -1; // super diagonal
+    for (i = 0; i < n-1; ++i) {
+        (*E)[i] = -1; // off diagonal
+        (*D)[i] = 1.0 + i * diagSpacing;
     }
-
-    // special cases
-    T[0] = 0; // sub diagonal of row 0
-    T[(n-1)*3 + 2] = 0; // super diagonal of row n-1
-
-    return T;
+    (*D)[n-1] = 1.0 + i * diagSpacing; // one more diagonal element than off diagonal elements
 }
 
-double* createMatrixScheme2(int n) {
+void createMatrixScheme2(double **D, double **E, int n) {
     // TODO
-    return NULL;
 }
