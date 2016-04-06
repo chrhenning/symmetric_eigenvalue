@@ -203,16 +203,16 @@ int main (int argc, char **argv)
      * The first diagonal element in T2 differs from the orignal part by subtracting theta^-1 * beta.
      */
 
-    // stage in divide tree
-    int s = 0;
     // all tasks that have zero remainder when computing (taskid % modulus) do a split in the current stage
     // find smallest power of two greater than numtasks
     int modulus = 1;
+    int maxModulus = 1;
     int numSplitStages = 0; // number of tree levels where splits are performed
     while (modulus < numtasks) {
-        modulus *= 2;
+        maxModulus *= 2;
         numSplitStages++;
     }
+    modulus = maxModulus;
 
     // at each split that we perform, we have to keep track of the lost beta entry
     /*
@@ -241,6 +241,8 @@ int main (int argc, char **argv)
     // number of leaves in the right subtree
     int numLeavesRight;
 
+    // stage in divide tree
+    int s = 0;
     for (s = 0; modulus > 1; s++) {
 
         // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
@@ -272,7 +274,7 @@ int main (int argc, char **argv)
             MPI_Send(E+n1, n2-1, MPI_DOUBLE, taskid + modulus/2, 3, MPI_COMM_WORLD);
         }
 
-        // if task es receiver of a subtree in this step
+        // if task is receiver of a subtree in this step
         if (taskid % modulus != 0 && taskid % (modulus/2) == 0) {
             // receive size of matrix to receive
             MPI_Recv(&n, 1, MPI_INT, taskid-modulus/2, 1, MPI_COMM_WORLD, &status);
@@ -298,11 +300,54 @@ int main (int argc, char **argv)
     // Compute eigenpairs of leaves using QR algorithm
     // ///////////////////////////
 
-    // orthonormal where the columns are eigenvector
-    double* Q = malloc(nl*nl * sizeof(double));
+    // orthonormal where the columns are eigenvectors
+    double* Q1 = malloc(nl*nl * sizeof(double));
 
-    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q, nl);
+    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q1, nl);
     assert(ret == 0);
+
+    // ///////////////////////////
+    // Conquer phase
+    // ///////////////////////////
+
+    // sizes of Q matrices
+    int nq1 = nl, nq2;
+    double* Q2 = NULL;
+
+    for (s = numSplitStages-1; modulus < maxModulus; s--) {
+
+        // if task computed a spectral decomposition in the last stage (but not in the current
+        if (taskid % modulus == 0 && taskid % (modulus*2) != 0) {
+            // send eigenvectors and eigenvalues to parent node in tree
+            MPI_Send(&nq1, 1, MPI_INT, taskid - modulus, 4, MPI_COMM_WORLD);
+            MPI_Send(D, nq1, MPI_DOUBLE, taskid - modulus, 5, MPI_COMM_WORLD);
+            MPI_Send(Q1, nq1*nq1, MPI_DOUBLE, taskid - modulus, 6, MPI_COMM_WORLD);
+
+            // Q1 is not needed anymore
+            free(Q1);
+            Q1 = NULL;
+        }
+
+
+        // if task combines two splits in this stage
+        if (taskid % (modulus*2) == 0) {
+
+            // receive size of matrix to receive
+            MPI_Recv(&nq2, 1, MPI_INT, taskid + modulus, 4, MPI_COMM_WORLD, &status);
+
+            // receive eigenvectors and eigenvalues from right child in tree
+            MPI_Recv(D, nq2, MPI_DOUBLE, taskid + modulus, 5, MPI_COMM_WORLD, &status);
+            Q2 = malloc(nq2*nq2 * sizeof(double));
+            MPI_Recv(Q2, nq2*nq2, MPI_DOUBLE, taskid + modulus, 6, MPI_COMM_WORLD, &status);
+
+            // TODO
+        }
+
+        }
+
+        modulus *= 2;
+    }
+
 
     // ///////////////////////////
     // End of algorithm
