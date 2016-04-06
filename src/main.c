@@ -197,6 +197,10 @@ int main (int argc, char **argv)
      * E1 = [a,b,c], E2 = [e,f,g]
      * The off diagonal element d would be the beta, which we have to eliminate in the splitting process.
      * So, the indices of the off-diagonals in the splitted matrix have the same start index as the diagonal elements but have one less element
+     *
+     * So, we split T into T1, T2 (note, the difference in notation: T1 and T2 have an hat on top in the book).
+     * The last diagonal element in T1 differs from the orignal part by subtracting theta * beta.
+     * The first diagonal element in T2 differs from the orignal part by subtracting theta^-1 * beta.
      */
 
     // stage in divide tree
@@ -204,8 +208,23 @@ int main (int argc, char **argv)
     // all tasks that have zero remainder when computing (taskid % modulus) do a split in the current stage
     // find smallest power of two greater than numtasks
     int modulus = 1;
-    while (modulus < numtasks)
+    int numSplitStages = 0; // number of tree levels where splits are performed
+    while (modulus < numtasks) {
         modulus *= 2;
+        numSplitStages++;
+    }
+
+    // at each split that we perform, we have to keep track of the lost beta entry
+    /*
+     * Since there are less than log(numtaks) stages, I allocate more the betas than necessary
+     * (note, actually not each task performs a split on each stage)
+     */
+    int betas[numSplitStages];
+    int thetas[numSplitStages];
+    // TODO: choose meaningful values of theta
+    for (i = 0; i < numSplitStages; ++i)
+        thetas[i] = 1;
+
     // Note, our goal is to have equally sized leaves
     int leafSize, sizeRemainder;
     if (taskid == 0) {
@@ -214,6 +233,9 @@ int main (int argc, char **argv)
     }
     MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    // the actual leafsize of the current task
+    int nl = leafSize + (taskid < sizeRemainder ? 1 : 0);
+    // helper variables
     // size of T in left resp. right subtree
     int n1,n2;
     // number of leaves in the right subtree
@@ -236,6 +258,13 @@ int main (int argc, char **argv)
             n2 += max(0, min(sizeRemainder-(taskid+modulus/2), numLeavesRight));
 
             //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, taskid + modulus/2, n2);
+
+            // save beta for later conquer phase and modify diagonal elements
+            betas[s] = E[n1-1];
+            // modify last diagonal element of T1
+            D[n1-1] -= theta[s] * betas[s];
+            // modify first diagonal element of T2
+            D[n1] -= 1.0/theta[s] * betas[s];
 
             // send size and second half of matrix
             MPI_Send(&n2, 1, MPI_INT, taskid + modulus/2, 1, MPI_COMM_WORLD);
