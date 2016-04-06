@@ -262,9 +262,9 @@ int main (int argc, char **argv)
             // save beta for later conquer phase and modify diagonal elements
             betas[s] = E[n1-1];
             // modify last diagonal element of T1
-            D[n1-1] -= theta[s] * betas[s];
+            D[n1-1] -= thetas[s] * betas[s];
             // modify first diagonal element of T2
-            D[n1] -= 1.0/theta[s] * betas[s];
+            D[n1] -= 1.0/thetas[s] * betas[s];
 
             // send size and second half of matrix
             MPI_Send(&n2, 1, MPI_INT, taskid + modulus/2, 1, MPI_COMM_WORLD);
@@ -288,13 +288,21 @@ int main (int argc, char **argv)
         modulus /= 2;
     }
 
-    // TODO: set betas to null, but keep them, as well as the size of the leaves
+    /*
+     * Some final remarks of the divide phase:
+     * The size of the current leave is in nl.
+     * The actual allocated memory is still stored in n (which will be needed in conquer phase)
+     */
 
     // ///////////////////////////
     // Compute eigenpairs of leaves using QR algorithm
     // ///////////////////////////
 
-    // steqr
+    // orthonormal where the columns are eigenvector
+    double* Q = malloc(nl*nl * sizeof(double));
+
+    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q, nl);
+    assert(ret == 0);
 
     // ///////////////////////////
     // End of algorithm
