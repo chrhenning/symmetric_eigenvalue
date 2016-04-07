@@ -1,3 +1,4 @@
+#include <omp.h>
 
 double* computeEigenvalues(double* D, double* z, int n, double beta, double theta) {
     /*
@@ -6,6 +7,10 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
     double* L = malloc(n * sizeof(double));
 
     // TODO: compute eigenvalues
+    int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < n; ++i)
+        L[i] = 1;
 
     return L;
 }

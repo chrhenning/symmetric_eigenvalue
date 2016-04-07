@@ -9,6 +9,7 @@
 
 #include "helper.h"
 #include "filehandling.h"
+#include "eigenvalues.h"
 
 #define MASTER 0
 
@@ -173,6 +174,8 @@ int main (int argc, char **argv)
     // ///////////////////////////
     // Divide phase
     // ///////////////////////////
+    if (taskid == MASTER)
+        printf("Start divide phase ...\n");
     /*
      * The goal of the divide phase is to create a binary tree which is as balanced as possible and contains nearly equal sized leaves.
      *
@@ -208,7 +211,7 @@ int main (int argc, char **argv)
     int modulus = 1;
     int maxModulus = 1;
     int numSplitStages = 0; // number of tree levels where splits are performed
-    while (modulus < numtasks) {
+    while (maxModulus < numtasks) {
         maxModulus *= 2;
         numSplitStages++;
     }
@@ -299,6 +302,9 @@ int main (int argc, char **argv)
     // ///////////////////////////
     // Compute eigenpairs of leaves using QR algorithm
     // ///////////////////////////
+    if (taskid == MASTER)
+        printf("Apply QR algorithm on leaves ...\n");
+    // TODO. make depth of tree big enough to assure that dense matrix Q of leaves can be stored (thus probably split T even on nodes itself)
 
     // orthonormal where the columns are eigenvectors
     double* Q1 = malloc(nl*nl * sizeof(double));
@@ -307,14 +313,76 @@ int main (int argc, char **argv)
     assert(ret == 0);
 
     // ///////////////////////////
-    // Conquer phase
+    // Conquer phase - Part 1 (Merge leaves)
     // ///////////////////////////
+    if (taskid == MASTER)
+        printf("Start Conquer Phase ...\n");
 
     // sizes of Q matrices
     int nq1 = nl, nq2;
     double* Q2 = NULL;
 
-    for (s = numSplitStages-1; modulus < maxModulus; s--) {
+    // node: modulus is actually still 1, but just as a reminder
+    modulus = 1;
+
+    // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
+    s = numSplitStages-1;
+
+    // if we had at least one split
+    if (numSplitStages > 0) {
+        // if task should not compute the spectral decomposition of two leaves
+        if ((taskid % 2) != 0) {
+            //printf("%d send ...\n", taskid);
+            // send eigenvectors and eigenvalues to parent node in tree
+            MPI_Send(&nq1, 1, MPI_INT, taskid - modulus, 4, MPI_COMM_WORLD);
+            MPI_Send(D, nq1, MPI_DOUBLE, taskid - modulus, 5, MPI_COMM_WORLD);
+            MPI_Send(Q1, nq1*nq1, MPI_DOUBLE, taskid - modulus, 6, MPI_COMM_WORLD);
+
+            // Q1 is not needed anymore
+            free(Q1);
+            Q1 = NULL;
+        }
+
+
+        // if task combines two splits in this stage
+        if ((taskid % 2) == 0) {
+            //printf("%d receive ...\n", taskid);
+            // receive size of matrix to receive
+            MPI_Recv(&nq2, 1, MPI_INT, taskid + modulus, 4, MPI_COMM_WORLD, &status);
+
+            // receive eigenvectors and eigenvalues from right child in tree
+            MPI_Recv(D+nq1, nq2, MPI_DOUBLE, taskid + modulus, 5, MPI_COMM_WORLD, &status);
+            Q2 = malloc(nq2*nq2 * sizeof(double));
+            MPI_Recv(Q2, nq2*nq2, MPI_DOUBLE, taskid + modulus, 6, MPI_COMM_WORLD, &status);
+
+            /*
+             * Compute z, where z is
+             *
+             * z = | Q1^T   0 | | e_k            |
+             *     | 0   Q2^T | | theta^-1 * e_1 |
+             *
+             * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
+             */
+            double* z = computeZ(Q1 + (nq1-1)*nq1, Q2, nq1, nq2, thetas[s]);
+
+            // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
+            // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
+            double* L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
+
+            // It holds that T = W L W^T, where W = QU
+            // depending on if we are a left or right child, we have to compute the last resp. first row of W.
+
+            // TODO
+        }
+
+        modulus *= 2;
+    }
+
+    // ///////////////////////////
+    // Conquer phase - Part 2 (Merge two children, that are not leaves)
+    // ///////////////////////////
+
+    /*    for (s = numSplitStages-2; modulus < maxModulus; s--) {
 
         // if task computed a spectral decomposition in the last stage (but not in the current
         if (taskid % modulus == 0 && taskid % (modulus*2) != 0) {
@@ -343,11 +411,9 @@ int main (int argc, char **argv)
             // TODO
         }
 
-        }
-
         modulus *= 2;
     }
-
+    */
 
     // ///////////////////////////
     // End of algorithm

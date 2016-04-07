@@ -30,3 +30,19 @@ void createMatrixScheme2(double **D, double **E, int n) {
     }
     (*D)[n-1] = 2.0; // one more diagonal element than off diagonal elements
 }
+
+
+double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta) {
+    double* z = malloc((nq1+nq2) * sizeof(double));
+
+    // copy last row of Q1 into z
+    memcpy(z, Q1l, nq1*sizeof(double));
+
+    // multiply first row of Q2 by theta^-1
+    int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for(i = 0; i < nq2; ++i)
+        z[nq1+i] = Q2f[i] * theta;
+
+    return z;
+}
