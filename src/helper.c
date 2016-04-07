@@ -1,6 +1,5 @@
 #include "helper.h"
 
-#include <stdlib.h>
 #include <omp.h>
 
 void createMatrixScheme1(double** D, double** E, int n) {

@@ -1,10 +1,17 @@
 #ifndef HELPER_H
 #define HELPER_H
 
-/**
+#include <stdlib.h>
+
+/*
  * This file contains a bunch of helper functions to keep the main file clearly arranged
  */
 
+/**
+ * @brief myfree Free the pointer were the given pointer points to and set it to NULL
+ * @param ptr Pointer to pointer
+ */
+inline void myfree(double** ptr) { free(*ptr); *ptr = NULL; }
 
 inline int min ( int a, int b ) { return a < b ? a : b; }
 inline int max ( int a, int b ) { return a > b ? a : b; }

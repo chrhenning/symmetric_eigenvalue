@@ -17,9 +17,9 @@ void showHelp();
 
 int main (int argc, char **argv)
 {
-    // ///////////////////////////
-    // initialize MPI
-    // ///////////////////////////
+    /**********************
+     * initialize MPI
+     **********************/
 
     int numtasks, taskid, len;
     char hostname[MPI_MAX_PROCESSOR_NAME];
@@ -46,9 +46,9 @@ int main (int argc, char **argv)
     int i,j,k;
 
     if (taskid == MASTER) {
-        // ///////////////////////////
-        // parse command line arguments
-        // ///////////////////////////
+        /**********************
+         * parse command line arguments
+         **********************/
 
         // no parameters are given, thus print usage hints and close programm
         if (argc == 1) {
@@ -120,9 +120,9 @@ int main (int argc, char **argv)
             printf("Output file: %s\n", outputfile);
 
 
-        // ///////////////////////////
-        // read or create matrix T
-        // ///////////////////////////
+        /**********************
+         * read or create matrix T
+         **********************/
 
         /*
          * How to store the matrix?
@@ -161,19 +161,19 @@ int main (int argc, char **argv)
     printf("   Task %d is running on node %s, which has %d available processors.\n", taskid, hostname, omp_get_num_procs());
     MPI_Barrier(MPI_COMM_WORLD);
 
-    // ///////////////////////////
-    // ///////////////////////////
-    // Cuppen's Algorithm to obtain all eigenpairs
-    // ///////////////////////////
-    // ///////////////////////////
+    /**********************
+     **********************
+     * Cuppen's Algorithm to obtain all eigenpairs
+     **********************
+     **********************/
 
     double tic = omp_get_wtime();
 
     MPI_Bcast(&n,1,MPI_INT,MASTER,MPI_COMM_WORLD);
 
-    // ///////////////////////////
-    // Divide phase
-    // ///////////////////////////
+    /**********************
+     * Divide phase
+     **********************/
     if (taskid == MASTER)
         printf("Start divide phase ...\n");
     /*
@@ -225,8 +225,22 @@ int main (int argc, char **argv)
     int betas[numSplitStages];
     int thetas[numSplitStages];
     // TODO: choose meaningful values of theta
+    #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < numSplitStages; ++i)
         thetas[i] = 1;
+
+    // If this task performs a split, then it stores the taskid of the right child in this array (the left child is the task itself)
+    // If there is no split, then the value is -1
+    int rightChild[numSplitStages];
+    // If this task was splitted in the stage before, then we store here the taskid of the parent, else -1
+    // More precisely, if there was a split involving this node at stage s, the we store in parent[s] the taskid of the node performing the split
+    int parent[numSplitStages];
+    // initialize above arrays
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < numSplitStages; ++i) {
+        rightChild[i] = -1;
+        parent[i] = -1;
+    }
 
     // Note, our goal is to have equally sized leaves
     int leafSize, sizeRemainder;
@@ -250,17 +264,20 @@ int main (int argc, char **argv)
 
         // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
         if (taskid % modulus == 0) {
+            rightChild[s] = taskid + modulus/2;
+            parent[s] = taskid; // left child will stay on this node
+
             // Compute size of left and right subtree depending on the number of childrens in this tree.
             // The left subtree will always be a fully balanced tree (so it will have modulus/2 leaves).
             // The right subtree has min(numtasks-(taskid+modulus/2) , modulus/2) leaves.
-            numLeavesRight = min(numtasks-(taskid+modulus/2), modulus/2);
+            numLeavesRight = min(numtasks-rightChild[s], modulus/2);
 
             n1 = modulus/2 * leafSize;
             n2 = numLeavesRight * leafSize;
 
             // split the remaining lines equally on the leaves
             n1 += max(0, min(sizeRemainder-taskid, modulus/2));
-            n2 += max(0, min(sizeRemainder-(taskid+modulus/2), numLeavesRight));
+            n2 += max(0, min(sizeRemainder-rightChild[s], numLeavesRight));
 
             //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, taskid + modulus/2, n2);
 
@@ -272,22 +289,24 @@ int main (int argc, char **argv)
             D[n1] -= 1.0/thetas[s] * betas[s];
 
             // send size and second half of matrix
-            MPI_Send(&n2, 1, MPI_INT, taskid + modulus/2, 1, MPI_COMM_WORLD);
-            MPI_Send(D+n1, n2, MPI_DOUBLE, taskid + modulus/2, 2, MPI_COMM_WORLD);
-            MPI_Send(E+n1, n2-1, MPI_DOUBLE, taskid + modulus/2, 3, MPI_COMM_WORLD);
+            MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
+            MPI_Send(D+n1, n2, MPI_DOUBLE, rightChild[s], 2, MPI_COMM_WORLD);
+            MPI_Send(E+n1, n2-1, MPI_DOUBLE, rightChild[s], 3, MPI_COMM_WORLD);
         }
 
         // if task is receiver of a subtree in this step
         if (taskid % modulus != 0 && taskid % (modulus/2) == 0) {
+            parent[s] = taskid-modulus/2; // I receive the right child produced in this stage, which I will split in the next stage
+
             // receive size of matrix to receive
-            MPI_Recv(&n, 1, MPI_INT, taskid-modulus/2, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(&n, 1, MPI_INT, parent[s], 1, MPI_COMM_WORLD, &status);
 
             // receive matrix
             assert(D == NULL && E == NULL);
             D = malloc(n * sizeof(double));
             E = malloc((n-1) * sizeof(double));
-            MPI_Recv(D, n, MPI_DOUBLE, taskid-modulus/2, 2, MPI_COMM_WORLD, &status);
-            MPI_Recv(E, n-1, MPI_DOUBLE, taskid-modulus/2, 3, MPI_COMM_WORLD, &status);
+            MPI_Recv(D, n, MPI_DOUBLE, parent[s], 2, MPI_COMM_WORLD, &status);
+            MPI_Recv(E, n-1, MPI_DOUBLE, parent[s], 3, MPI_COMM_WORLD, &status);
         }
 
         modulus /= 2;
@@ -299,28 +318,47 @@ int main (int argc, char **argv)
      * The actual allocated memory is still stored in n (which will be needed in conquer phase)
      */
 
-    // ///////////////////////////
-    // Compute eigenpairs of leaves using QR algorithm
-    // ///////////////////////////
+    /**********************
+     * Compute eigenpairs of leaves using QR algorithm
+     **********************/
     if (taskid == MASTER)
         printf("Apply QR algorithm on leaves ...\n");
     // TODO. make depth of tree big enough to assure that dense matrix Q of leaves can be stored (thus probably split T even on nodes itself)
 
     // orthonormal where the columns are eigenvectors
-    double* Q1 = malloc(nl*nl * sizeof(double));
+    double* Q = malloc(nl*nl * sizeof(double));
 
-    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q1, nl);
+    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q, nl);
     assert(ret == 0);
+    // off-diagonal elements are not needed anymore
+    myfree(&E);
+    assert(E == NULL);
 
-    // ///////////////////////////
-    // Conquer phase - Part 1 (Merge leaves)
-    // ///////////////////////////
+    // upper stage in the tree only needs first and last line (as explained later)
+    // FIXME: Is there a better way than copying the already existing rows?
+    double* Q1f = malloc(nl * sizeof(double)); // first row
+    double* Q1l = malloc(nl * sizeof(double)); // last row
+    memcpy(Q1f, Q, nl*sizeof(double));
+    memcpy(Q1l, Q+(nl-1)*nl, nl*sizeof(double));
+    // if there was not a single split, then we need the eigenvectors stored in Q
+    if (numSplitStages == 0)
+        goto EndOfAlgorithm;
+    myfree(&Q);
+
+    /**********************
+     * Conquer phase - Part 1 (Merge leaves)
+     **********************/
     if (taskid == MASTER)
         printf("Start Conquer Phase ...\n");
 
     // sizes of Q matrices
     int nq1 = nl, nq2;
-    double* Q2 = NULL;
+    double *Q2f = NULL, *Q2l = NULL;
+
+    // store vector z for rank-one update
+    double* z = NULL;
+    // store eigenvalues in here
+    double* L = NULL;
 
     // node: modulus is actually still 1, but just as a reminder
     modulus = 1;
@@ -330,30 +368,37 @@ int main (int argc, char **argv)
 
     // if we had at least one split
     if (numSplitStages > 0) {
-        // if task should not compute the spectral decomposition of two leaves
-        if ((taskid % 2) != 0) {
-            //printf("%d send ...\n", taskid);
-            // send eigenvectors and eigenvalues to parent node in tree
-            MPI_Send(&nq1, 1, MPI_INT, taskid - modulus, 4, MPI_COMM_WORLD);
-            MPI_Send(D, nq1, MPI_DOUBLE, taskid - modulus, 5, MPI_COMM_WORLD);
-            MPI_Send(Q1, nq1*nq1, MPI_DOUBLE, taskid - modulus, 6, MPI_COMM_WORLD);
+        assert(parent[s] != -1);
 
-            // Q1 is not needed anymore
-            free(Q1);
-            Q1 = NULL;
+        // if task should not compute the spectral decomposition of two leaves
+        if (parent[s] != taskid) {
+            assert(parent[s] == (taskid - modulus));
+            //printf("%d send ...\n", taskid);
+            // send eigenvalues and necessary part of eigenvectors to parent node in tree
+            MPI_Send(&nq1, 1, MPI_INT, parent[s], 4, MPI_COMM_WORLD);
+            MPI_Send(D, nq1, MPI_DOUBLE, parent[s], 5, MPI_COMM_WORLD);
+            MPI_Send(Q1f, nq1, MPI_DOUBLE, parent[s], 6, MPI_COMM_WORLD);
+            MPI_Send(Q1l, nq1, MPI_DOUBLE, parent[s], 7, MPI_COMM_WORLD);
+
+            // Q1l, Q1f are not needed anymore
+            myfree(&Q1f);
+            myfree(&Q1l);
         }
 
 
         // if task combines two splits in this stage
-        if ((taskid % 2) == 0) {
+        if (parent[s] == taskid) {
+            assert(rightChild[s] == (taskid + modulus));
             //printf("%d receive ...\n", taskid);
             // receive size of matrix to receive
-            MPI_Recv(&nq2, 1, MPI_INT, taskid + modulus, 4, MPI_COMM_WORLD, &status);
+            MPI_Recv(&nq2, 1, MPI_INT, rightChild[s], 4, MPI_COMM_WORLD, &status);
 
-            // receive eigenvectors and eigenvalues from right child in tree
-            MPI_Recv(D+nq1, nq2, MPI_DOUBLE, taskid + modulus, 5, MPI_COMM_WORLD, &status);
-            Q2 = malloc(nq2*nq2 * sizeof(double));
-            MPI_Recv(Q2, nq2*nq2, MPI_DOUBLE, taskid + modulus, 6, MPI_COMM_WORLD, &status);
+            // receive eigenvalues and necessary part of eigenvectors from right child in tree
+            MPI_Recv(D+nq1, nq2, MPI_DOUBLE, rightChild[s], 5, MPI_COMM_WORLD, &status);
+            Q2f = malloc(nq2 * sizeof(double));
+            Q2l = malloc(nq2 * sizeof(double));
+            MPI_Recv(Q2f, nq2, MPI_DOUBLE, rightChild[s], 6, MPI_COMM_WORLD, &status);
+            MPI_Recv(Q2l, nq2, MPI_DOUBLE, rightChild[s], 7, MPI_COMM_WORLD, &status);
 
             /*
              * Compute z, where z is
@@ -363,24 +408,47 @@ int main (int argc, char **argv)
              *
              * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
              */
-            double* z = computeZ(Q1 + (nq1-1)*nq1, Q2, nq1, nq2, thetas[s]);
+            z = computeZ(Q1l, Q2f, nq1, nq2, thetas[s]);
 
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-            double* L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
+            L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
 
-            // It holds that T = W L W^T, where W = QU
-            // depending on if we are a left or right child, we have to compute the last resp. first row of W.
+            /*
+             * It holds that T = W L W^T, where W = QU
+             * We only have to compute the first and last row of W and send it to the parent
+             *
+             * left child: the parent needs the last row of W (which is Q1 in parent) to compute z.
+             * To compute the last row of W we only need the last row of Q (last row of Q2)
+             *
+             * right child: the parent needs the first row of W (which is Q2 in parent) to compute z.
+             * To compute the first row of W we only need the first row of Q (first row of Q1)
+             *
+             * But, the parent has (if s > 1) to compute the last and first row of its W again, so it needs
+             * also the first row of its Q1 from its left child resp. the last row of its Q2 from the right child
+             */
+            if (s == 0) {
+                assert(taskid == MASTER);
+                // write eigenvalues into file
+                goto EndOfAlgorithm;
+            } else {
+
+            }
 
             // TODO
+
+            myfree(&Q1f);
+            myfree(&Q1l);
+            myfree(&Q2f);
+            myfree(&Q2l);
         }
 
         modulus *= 2;
     }
 
-    // ///////////////////////////
-    // Conquer phase - Part 2 (Merge two children, that are not leaves)
-    // ///////////////////////////
+    /**********************
+     * Conquer phase - Part 2 (Merge two children, that are not leaves)
+     **********************/
 
     /*    for (s = numSplitStages-2; modulus < maxModulus; s--) {
 
@@ -415,22 +483,34 @@ int main (int argc, char **argv)
     }
     */
 
-    // ///////////////////////////
-    // End of algorithm
-    // ///////////////////////////
+    /**********************
+     * End of algorithm
+     **********************/
+
+    EndOfAlgorithm:
 
     MPI_Barrier(MPI_COMM_WORLD);
     double toc = omp_get_wtime();
     if (taskid == MASTER) {
-        free(D);
-        free(E);
 
         printf("\n");
         printf("Elapsed time in %f seconds\n", toc-tic);
 
         if (outputfile != NULL) {
             // TODO print file
+            // if no splits have been performed, thus there is no tree, eigenpairs have been computed by QR algorithm
+            if (numSplitStages == 0) {
+                // eigenvectors are in Q and eigenvalues in D
+
+                free(Q);
+            } else {
+
+                free(z);
+                free(L);
+            }
         }
+
+        free(D);
     }
 
     MPI_FINALIZE();
