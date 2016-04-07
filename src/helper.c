@@ -19,5 +19,14 @@ void createMatrixScheme1(double** D, double** E, int n) {
 }
 
 void createMatrixScheme2(double **D, double **E, int n) {
-    // TODO
+    *D = malloc(n * sizeof(double));
+    *E = malloc((n-1) * sizeof(double));
+
+    int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < n-1; ++i) {
+        (*E)[i] = -1; // off diagonal
+        (*D)[i] = 2;
+    }
+    (*D)[n-1] = 2.0; // one more diagonal element than off diagonal elements
 }
