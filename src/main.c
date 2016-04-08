@@ -346,7 +346,7 @@ int main (int argc, char **argv)
     myfree(&Q);
 
     /**********************
-     * Conquer phase - Part 1 (Merge leaves)
+     * Conquer phase
      **********************/
     if (taskid == MASTER)
         printf("Start Conquer Phase ...\n");
@@ -385,6 +385,9 @@ int main (int argc, char **argv)
             // Q1l, Q1f are not needed anymore
             myfree(&Q1f);
             myfree(&Q1l);
+
+            // this task does not perform any merges anymore
+            goto EndOfAlgorithm;
         }
 
 
@@ -442,16 +445,37 @@ int main (int argc, char **argv)
                 goto EndOfAlgorithm;
             }
 
-            // compute first and last row of W and send to parent
+            // compute first and last row of W
+            double* Wf = malloc((nq1+nq2) * sizeof(double)); // first line of W
+            double* Wl = malloc((nq1+nq2) * sizeof(double)); // last line of W
 
+            #pragma omp parallel for default(shared) private(i,j) schedule(static)
+            for (i = 0; i < nq1+nq2; ++i) {
+                Wf[i] = 0;
+                for (j = 0; j < nq1; ++j)
+                    Wf[i] += Q1f[j] * getEVElement(D,z,L,N,nq1+nq2,i,j);
+                Wl[i] = 0;
+                for (j = 0; j < nq1; ++j)
+                    Wl[i] += Q2l[j] * getEVElement(D,z,L,N,nq1+nq2,i,nq1+j);
+            }
 
-
-            // TODO
 
             myfree(&Q1f);
             myfree(&Q1l);
             myfree(&Q2f);
             myfree(&Q2l);
+
+            // update variables for next iteration
+            nq1 = nq1 + nq2;
+            Q1f = Wf;
+            Q1l = Wl;
+            Wf = NULL;
+            Wl = NULL;
+
+            //myfree(&D);
+            myfree(&z);
+            myfree(&L);
+            myfree(&N);
         }
 
         modulus *= 2;
@@ -515,9 +539,10 @@ int main (int argc, char **argv)
 
                 free(Q);
             } else {
-
+                /*
                 free(z);
                 free(L);
+                free(N);*/
             }
         }
 
