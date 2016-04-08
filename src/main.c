@@ -359,6 +359,8 @@ int main (int argc, char **argv)
     double* z = NULL;
     // store eigenvalues in here
     double* L = NULL;
+    // store normalization factors in this vector, which are used to normalize the eigenvectors
+    double* N = NULL;
 
     // node: modulus is actually still 1, but just as a reminder
     modulus = 1;
@@ -413,6 +415,8 @@ int main (int argc, char **argv)
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
             L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
+            // compute normalization factors
+            N = computeNormalizationFactors(D,z,L,nq1+nq2);
 
             /*
              * It holds that T = W L W^T, where W = QU
@@ -427,13 +431,20 @@ int main (int argc, char **argv)
              * But, the parent has (if s > 1) to compute the last and first row of its W again, so it needs
              * also the first row of its Q1 from its left child resp. the last row of its Q2 from the right child
              */
-            if (s == 0) {
+            if (s == 0) { // if we already reached root of tree
                 assert(taskid == MASTER);
                 // write eigenvalues into file
-                goto EndOfAlgorithm;
-            } else {
+                myfree(&Q1f);
+                myfree(&Q1l);
+                myfree(&Q2f);
+                myfree(&Q2l);
 
+                goto EndOfAlgorithm;
             }
+
+            // compute first and last row of W and send to parent
+
+
 
             // TODO
 

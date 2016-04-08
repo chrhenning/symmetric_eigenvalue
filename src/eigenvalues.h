@@ -15,5 +15,32 @@
  */
 double* computeEigenvalues(double* D, double* z, int n, double beta, double theta);
 
+/**
+ * @brief computeNormalizationFactors Compute the normalization factors for the eigenvector construction
+ * @param D Diagonal elements
+ * @param z Vector z
+ * @param L Eigenvalues lambda_i
+ * @param n Size of D,z,L
+ * @return Vector of size n with normalization factors
+ *
+ * Each normalization factor is computed as: sqrt(sum_i(z_i^2/(d_i - lambda_i)^2))
+ */
+double* computeNormalizationFactors(double* D, double* z, double* L, int n);
+
+/**
+ * @brief getEVElement Get an entry j from eigenvector i
+ * @param D Diagonal elements
+ * @param z Vector z
+ * @param L Eigenvalues lambda_i
+ * @param N Normalization factors
+ * @param n Size of D,z,L,N
+ * @param i Considered eigenvector
+ * @param j Considered entry in i-th eigenvector
+ * @return  Entry j of eigenvector i
+ *
+ * The element is computed as follows: z_j / ((d_j-lambda_i) * N[i])
+ */
+inline double getEVElement(double* D, double* z, double* L, double* N, int n, int i, int j) { return z[j] / ((D[j]-L[i]) * N[i]); }
+
 
 #endif // EIGENVALUES_H
