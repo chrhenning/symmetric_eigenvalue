@@ -362,14 +362,12 @@ int main (int argc, char **argv)
     // store normalization factors in this vector, which are used to normalize the eigenvectors
     double* N = NULL;
 
-    // node: modulus is actually still 1, but just as a reminder
+    // note: modulus is actually still 1, but just as a reminder
     modulus = 1;
 
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
-    s = numSplitStages-1;
-
-    // if we had at least one split
-    if (numSplitStages > 0) {
+    assert(numSplitStages > 0);
+    for (s = numSplitStages-1; modulus < maxModulus; s--) {
         assert(parent[s] != -1);
 
         // if task should not compute the spectral decomposition of two leaves
@@ -382,9 +380,10 @@ int main (int argc, char **argv)
             MPI_Send(Q1f, nq1, MPI_DOUBLE, parent[s], 6, MPI_COMM_WORLD);
             MPI_Send(Q1l, nq1, MPI_DOUBLE, parent[s], 7, MPI_COMM_WORLD);
 
-            // Q1l, Q1f are not needed anymore
+            // this task can't be the master, so there is no work left to do for it
             myfree(&Q1f);
             myfree(&Q1l);
+            myfree(&D);
 
             // this task does not perform any merges anymore
             goto EndOfAlgorithm;
@@ -482,43 +481,6 @@ int main (int argc, char **argv)
     }
 
     /**********************
-     * Conquer phase - Part 2 (Merge two children, that are not leaves)
-     **********************/
-
-    /*    for (s = numSplitStages-2; modulus < maxModulus; s--) {
-
-        // if task computed a spectral decomposition in the last stage (but not in the current
-        if (taskid % modulus == 0 && taskid % (modulus*2) != 0) {
-            // send eigenvectors and eigenvalues to parent node in tree
-            MPI_Send(&nq1, 1, MPI_INT, taskid - modulus, 4, MPI_COMM_WORLD);
-            MPI_Send(D, nq1, MPI_DOUBLE, taskid - modulus, 5, MPI_COMM_WORLD);
-            MPI_Send(Q1, nq1*nq1, MPI_DOUBLE, taskid - modulus, 6, MPI_COMM_WORLD);
-
-            // Q1 is not needed anymore
-            free(Q1);
-            Q1 = NULL;
-        }
-
-
-        // if task combines two splits in this stage
-        if (taskid % (modulus*2) == 0) {
-
-            // receive size of matrix to receive
-            MPI_Recv(&nq2, 1, MPI_INT, taskid + modulus, 4, MPI_COMM_WORLD, &status);
-
-            // receive eigenvectors and eigenvalues from right child in tree
-            MPI_Recv(D, nq2, MPI_DOUBLE, taskid + modulus, 5, MPI_COMM_WORLD, &status);
-            Q2 = malloc(nq2*nq2 * sizeof(double));
-            MPI_Recv(Q2, nq2*nq2, MPI_DOUBLE, taskid + modulus, 6, MPI_COMM_WORLD, &status);
-
-            // TODO
-        }
-
-        modulus *= 2;
-    }
-    */
-
-    /**********************
      * End of algorithm
      **********************/
 
@@ -537,15 +499,19 @@ int main (int argc, char **argv)
             if (numSplitStages == 0) {
                 // eigenvectors are in Q and eigenvalues in D
 
-                free(Q);
+
             } else {
-                /*
-                free(z);
-                free(L);
-                free(N);*/
+                // use D,z,L,N
             }
         }
 
+        if (numSplitStages == 0) {
+            free(Q);
+        } else {
+            free(z);
+            free(L);
+            free(N);
+        }
         free(D);
     }
 
