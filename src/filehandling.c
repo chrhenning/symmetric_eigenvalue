@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <omp.h>
-#include "mpi.h"
+//#include "mkl.h"
 
 #include "../lib/mmio.h"
 
@@ -161,78 +161,59 @@ int writeResults(const char* filename, double* OD, double* OE, double* D, double
         return -1;
     }
 
-    double norm;
+    double norm, lambda;
     int i,j,k;
     double *x = malloc(n * sizeof(double));
-    // if we haven't applied cuppens algorithm (no splits)
-    if (Q != NULL) {
-        // for each eigenvalue
-        for (i = 0; i < n; ++i) {
 
-            // compute x = T*x_i, where x_i is the current eigenvector
-            if (n == 1) {
-                x[0] = OD[0] * Q[i];
-            } else {
-                x[0] = OD[0] * Q[i] + OE[0] * Q[n + i];
-                #pragma omp parallel for default(shared) private(j) schedule(static)
-                for (j = 1; j < n-1; ++j) {
-                    x[j] = OE[j-1] * Q[n*(j-1) + i] + OD[j] * Q[n*j + i] + OE[j] * Q[n*(j+1) + i];
-                }
-                x[n-1] = OE[n-2] * Q[n*(n-2) + i] + OD[n-1] * Q[n*(n-1) + i];
-            }
+    // current eigenvector
+    double* xi = malloc(n * sizeof(double));
 
-            // compute x - lambda_i*x_i
+    // for each eigenvalue
+    for (i = 0; i < n; ++i) {
+        // extract current eigenvector
+        if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
             #pragma omp parallel for default(shared) private(j) schedule(static)
             for (j = 0; j < n; ++j) {
-                x[j] += D[i] * Q[n*j + i];
+                xi[j] = Q[n*j + i];
             }
-
-            // compute norm of x
-            norm = cblas_dnrm2(n, x, 1);
-
-            // write results to file
-            fprintf(f, "%20.19g %20.19g\n", D[i], norm);
-        }
-    } else {
-        // current eigenvector
-        double* xi = malloc(n * sizeof(double));
-
-        // for each eigenvalue
-        for (i = 0; i < n; ++i) {
-            // extract current eigenvector
+            lambda = D[i];
+        } else {
             #pragma omp parallel for default(shared) private(j) schedule(static)
             for (j = 0; j < n; ++j) {
                 xi[j] = getEVElement(D,z,L,N,n,i,j);
             }
-
-            // compute x = T*x_i, where x_i is the current eigenvector
-            if (n == 1) {
-                x[0] = OD[0] * xi[0];
-            } else {
-                x[0] = OD[0] * xi[0] + OE[0] * xi[1];
-                #pragma omp parallel for default(shared) private(j) schedule(static)
-                for (j = 1; j < n-1; ++j) {
-                    x[j] = OE[j-1] * xi[j-1] + OD[j] * xi[j] + OE[j] * xi[j+1];
-                }
-                x[n-1] = OE[n-2] * xi[n-2] + OD[n-1] * xi[n-1];
-            }
-
-            // compute x - lambda_i*x_i
-            #pragma omp parallel for default(shared) private(j) schedule(static)
-            for (j = 0; j < n; ++j) {
-                x[j] += L[i] * xi[j];
-            }
-
-            // compute norm of x
-            norm = cblas_dnrm2(n, x, 1);
-
-            // write results to file
-            fprintf(f, "%20.19g %20.19g\n", L[i], norm);
+            lambda = L[i];
         }
 
-        free(xi);
+        // compute x = T*x_i, where x_i is the current eigenvector
+        if (n == 1) {
+            x[0] = OD[0] * xi[0];
+        } else {
+            x[0] = OD[0] * xi[0] + OE[0] * xi[1];
+            #pragma omp parallel for default(shared) private(j) schedule(static)
+            for (j = 1; j < n-1; ++j) {
+                x[j] = OE[j-1] * xi[j-1] + OD[j] * xi[j] + OE[j] * xi[j+1];
+            }
+            x[n-1] = OE[n-2] * xi[n-2] + OD[n-1] * xi[n-1];
+        }
+
+        norm = 0;
+        // compute ||x - lambda_i*x_i||
+        #pragma omp parallel for default(shared) private(j) schedule(static) reduction(+:norm)
+        for (j = 0; j < n; ++j) {
+            x[j] -= lambda * xi[j];
+            norm = norm + x[j]*x[j];
+        }
+        norm = sqrt(norm);
+
+        // compute norm of x
+        //norm = cblas_dnrm2(n, x, 1);
+
+        // write results to file
+        fprintf(f, "%20.19g %20.19g\n", lambda, norm);
     }
 
+    free(xi);
     free(x);
 
     if (f !=stdout) fclose(f);
