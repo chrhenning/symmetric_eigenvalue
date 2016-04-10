@@ -2,6 +2,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
+#include <omp.h>
+#include "mpi.h"
+
 #include "../lib/mmio.h"
 
 int readTriadiagonalMatrixFromSparseMTX(const char* filename, double** T, int* n) {
@@ -143,6 +147,95 @@ int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, do
     }
 
     if (f !=stdin) fclose(f);
+
+    return 0;
+}
+
+int writeResults(const char* filename, double* OD, double* OE, double* D, double* z, double* L, double* N, double* Q, int n) {
+
+    assert(n > 0);
+    FILE *f;
+
+    if ((f = fopen(filename, "w")) == NULL) {
+        fprintf(stderr, "Could not open file\n");
+        return -1;
+    }
+
+    double norm;
+    int i,j,k;
+    double *x = malloc(n * sizeof(double));
+    // if we haven't applied cuppens algorithm (no splits)
+    if (Q != NULL) {
+        // for each eigenvalue
+        for (i = 0; i < n; ++i) {
+
+            // compute x = T*x_i, where x_i is the current eigenvector
+            if (n == 1) {
+                x[0] = OD[0] * Q[i];
+            } else {
+                x[0] = OD[0] * Q[i] + OE[0] * Q[n + i];
+                #pragma omp parallel for default(shared) private(j) schedule(static)
+                for (j = 1; j < n-1; ++j) {
+                    x[j] = OE[j-1] * Q[n*(j-1) + i] + OD[j] * Q[n*j + i] + OE[j] * Q[n*(j+1) + i];
+                }
+                x[n-1] = OE[n-2] * Q[n*(n-2) + i] + OD[n-1] * Q[n*(n-1) + i];
+            }
+
+            // compute x - lambda_i*x_i
+            #pragma omp parallel for default(shared) private(j) schedule(static)
+            for (j = 0; j < n; ++j) {
+                x[j] += D[i] * Q[n*j + i];
+            }
+
+            // compute norm of x
+            norm = cblas_dnrm2(n, x, 1);
+
+            // write results to file
+            fprintf(f, "%20.19g %20.19g\n", D[i], norm);
+        }
+    } else {
+        // current eigenvector
+        double* xi = malloc(n * sizeof(double));
+
+        // for each eigenvalue
+        for (i = 0; i < n; ++i) {
+            // extract current eigenvector
+            #pragma omp parallel for default(shared) private(j) schedule(static)
+            for (j = 0; j < n; ++j) {
+                xi[j] = getEVElement(D,z,L,N,n,i,j);
+            }
+
+            // compute x = T*x_i, where x_i is the current eigenvector
+            if (n == 1) {
+                x[0] = OD[0] * xi[0];
+            } else {
+                x[0] = OD[0] * xi[0] + OE[0] * xi[1];
+                #pragma omp parallel for default(shared) private(j) schedule(static)
+                for (j = 1; j < n-1; ++j) {
+                    x[j] = OE[j-1] * xi[j-1] + OD[j] * xi[j] + OE[j] * xi[j+1];
+                }
+                x[n-1] = OE[n-2] * xi[n-2] + OD[n-1] * xi[n-1];
+            }
+
+            // compute x - lambda_i*x_i
+            #pragma omp parallel for default(shared) private(j) schedule(static)
+            for (j = 0; j < n; ++j) {
+                x[j] += L[i] * xi[j];
+            }
+
+            // compute norm of x
+            norm = cblas_dnrm2(n, x, 1);
+
+            // write results to file
+            fprintf(f, "%20.19g %20.19g\n", L[i], norm);
+        }
+
+        free(xi);
+    }
+
+    free(x);
+
+    if (f !=stdout) fclose(f);
 
     return 0;
 }

@@ -39,6 +39,10 @@ int main (int argc, char **argv)
     double* D = NULL; // diagonal elements
     double* E = NULL; // off diagonal elements
 
+    // copies of D and E, which are needed to write the output file (we need the original T)
+    // Note, even if a copy wastes memory, it's much faster then reading the matrix again from file later on when we need it
+    double *OD, *OE;
+
     // name of output file
     char* outputfile = NULL;
 
@@ -155,6 +159,12 @@ int main (int argc, char **argv)
             assert(E[i] != 0);
         }
         assert(D[n-1] != 0);
+
+        // create copies of E and D
+        OD = malloc(n * sizeof(double));
+        OE = malloc((n-1) * sizeof(double));
+        memcpy(OD, D, n*sizeof(double));
+        memcpy(OE, E, (n-1)*sizeof(double));
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -498,11 +508,12 @@ int main (int argc, char **argv)
             // if no splits have been performed, thus there is no tree, eigenpairs have been computed by QR algorithm
             if (numSplitStages == 0) {
                 // eigenvectors are in Q and eigenvalues in D
-
-
+                assert(z == NULL && L == NULL && N == NULL);
             } else {
                 // use D,z,L,N
+                assert(Q == NULL);
             }
+            writeResults(outputfile,OD,OE,D,z,L,N,Q,n);
         }
 
         if (numSplitStages == 0) {
