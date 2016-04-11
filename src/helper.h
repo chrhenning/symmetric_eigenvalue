@@ -31,7 +31,7 @@ void createMatrixScheme1(double** D, double** E, int n);
  * @param E Off-diagonal elements of matrix.
  *
  * The eigenvalues of this matrix should have the form:
- * lambda_i = 4 - 2 * cos((PI*i)/(n+1))
+ * lambda_i = 2 + 2 * cos((PI*i)/(n+1))
  */
 void createMatrixScheme2(double** D, double** E, int n);
 
@@ -52,5 +52,12 @@ void createMatrixScheme2(double** D, double** E, int n);
  * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
  */
 double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta);
+
+/**
+ * @brief computeEigenvaluesOfScheme2 Compute the eigenvalues: lambda_i = 2 + 2 * cos((PI*i)/(n+1))
+ * @param n Size of matrix
+ * @return
+ */
+double* computeEigenvaluesOfScheme2(int n);
 
 #endif // HELPER_H

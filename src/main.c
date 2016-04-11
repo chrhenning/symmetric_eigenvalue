@@ -33,6 +33,10 @@ int main (int argc, char **argv)
     // we don't want to use nested parallelism, because it yields to worse results, if it is not controlled by any intelligence
     omp_set_nested(0);
 
+    // If we case that we want to end the program while parsing the option (for example when showing the usage hints -h),
+    // then I don't want to abort the program. So I need this variable to exit it properly
+    int endProgram = 0;
+
     // size of tridiagonal matrix
     int n;
     // symmetric tridiagonal matrix T is splitted into diagonal elements D and off-diagonal elements E
@@ -77,7 +81,8 @@ int main (int argc, char **argv)
             {
             case 'h':
                 showHelp();
-                MPI_ABORT(MPI_COMM_WORLD, 0);
+                endProgram = 1;
+                goto StartOfAlgorithm;
             case 'i':
                 inputfile = optarg;
                 break;
@@ -165,6 +170,15 @@ int main (int argc, char **argv)
         OE = malloc((n-1) * sizeof(double));
         memcpy(OD, D, n*sizeof(double));
         memcpy(OE, E, (n-1)*sizeof(double));
+    }
+
+    StartOfAlgorithm:
+
+    // in case the MASTER tells us we should end here
+    MPI_Bcast(&endProgram,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    if (endProgram == 1) {
+        MPI_Finalize();
+        return 0;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -550,9 +564,10 @@ void showHelp() {
     printf(" -s NUM\n");
     printf("    If you want to compute the eigenvalues of a predefined matrix, you may.\n");
     printf("    use this option to define the scheme of the matrix.\n");
-    printf("    1 - eigenvalue i has the form: 4 - 2*cos((PI*i)/(n+1)) \n");
-    printf("    2 - Matrix will have the tridiagonal form [-1,d_i,-1] where the diagonal\n");
+    printf("    1 - Matrix will have the tridiagonal form [-1,d_i,-1] where the diagonal\n");
     printf("        elements will be evenly spaced in the interval [1,100] \n");
+    printf("    2 - Eigenvalue i has the form: 2 + 2*cos((PI*i)/(n+1)) \n");
+    printf("        Poisson-matrix (tridiagonal form of [-1,2-1])\n");
     printf("    If option i is used, then this option will be ignored.\n");
     printf(" -n NUM\n");
     printf("    Specify the dimension of the matrix chosen with option -s.\n");

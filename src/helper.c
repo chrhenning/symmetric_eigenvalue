@@ -1,6 +1,7 @@
 #include "helper.h"
 
 #include <omp.h>
+#include <math.h>
 
 void createMatrixScheme1(double** D, double** E, int n) {
     *D = malloc(n * sizeof(double));
@@ -44,4 +45,16 @@ double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta) {
         z[nq1+i] = Q2f[i] * theta;
 
     return z;
+}
+
+double* computeEigenvaluesOfScheme2(int n) {
+
+    double* L = malloc(n * sizeof(double));
+
+    int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < n; ++i)
+        L[i] = 2 + 2 * cos((M_PI*(i+1))/(n+1));
+
+    return L;
 }
