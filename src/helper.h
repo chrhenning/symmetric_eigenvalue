@@ -60,4 +60,19 @@ double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta);
  */
 double* computeEigenvaluesOfScheme2(int n);
 
+/**
+ * @brief printVector Print vector on console
+ * @param vec Vector
+ * @param n Size
+ */
+void printVector(double* vec, int n);
+
+/**
+ * @brief printTridiagonalMatrix Print tridiagonal matrix on console
+ * @param D Diagonal elements
+ * @param E Off-diagonal elements
+ * @param n Size
+ */
+void printTridiagonalMatrix(double* D, double* E, int n);
+
 #endif // HELPER_H

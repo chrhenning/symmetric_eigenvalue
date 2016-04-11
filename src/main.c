@@ -441,6 +441,7 @@ int main (int argc, char **argv)
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
             L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
+
             // compute normalization factors
             N = computeNormalizationFactors(D,z,L,nq1+nq2);
 

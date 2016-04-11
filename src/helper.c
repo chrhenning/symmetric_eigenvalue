@@ -2,6 +2,7 @@
 
 #include <omp.h>
 #include <math.h>
+#include <assert.h>
 
 void createMatrixScheme1(double** D, double** E, int n) {
     *D = malloc(n * sizeof(double));
@@ -57,4 +58,28 @@ double* computeEigenvaluesOfScheme2(int n) {
         L[i] = 2 + 2 * cos((M_PI*(i+1))/(n+1));
 
     return L;
+}
+
+void printVector(double* vec, int n) {
+    int i = 0;
+    for (i = 0; i < n-1; ++i)
+        printf("%g, ", vec[i]);
+    printf("%g\n", vec[n-1]);
+}
+
+void printTridiagonalMatrix(double* D, double* E, int n) {
+    assert(n>0);
+    if (n == 1)
+        printf("%g\n", D[0]);
+    else if (n == 2) {
+        printf("%g\t%g\n", D[0], E[0]);
+        printf("%g\t%g\n", E[0], D[1]);
+    }
+    else {
+        int i = 0;
+        printf("%g\t%g\t0\n", D[0], E[0]);
+        for (i = 1; i < n-2; ++i)
+            printf("%g\t%g\t%g\n", E[i-1], D[i], E[i]);
+        printf("0\t%g\t%g\n", E[n-2], D[n-1]);
+    }
 }
