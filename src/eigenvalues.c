@@ -7,6 +7,22 @@
 
 #include "helper.h"
 
+/* When I sort the diagonal elements, I need a mapping back to the original order */
+struct diagElem {
+    double e; // element
+    int i; // index
+};
+
+int compare( const void* a, const void* b)
+{
+     struct diagElem e1 = * ( (struct diagElem*) a );
+     struct diagElem e2 = * ( (struct diagElem*) b );
+
+     if ( e1.e == e2.e ) return 0;
+     else if ( e1.e < e2.e ) return -1;
+     else return 1;
+}
+
 inline double secularEquation(double lambda, double roh, double* z, double* D, int n) {
     double sum = 0;
     int i;
@@ -24,6 +40,16 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
 
     double roh = beta * theta;
     assert(roh != 0);
+
+    // copy and sort diagonal elements
+    struct diagElem* SD = malloc(n * sizeof(struct diagElem));
+    int i;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < n; ++i) {
+        SD[i].e = D[i];
+        SD[i].i = i;
+    }
+    qsort(SD, n, sizeof(struct diagElem), compare);
 
     /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
      * If roh < 0, then the first eigenvalue is before the first d_i */
@@ -48,35 +74,38 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
       If sign(f(c)) = sign(f(a)) then a ← c else b ← c # new interval
     EndWhile
     */
-    int i;
-    //#pragma omp parallel for default(shared) private(i) schedule(static)
+    #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) { // for each eigenvalue
         double lambda = 0;
         double a, b; // interval boundaries
+
+        int ind = SD[i].i;
+        double di = SD[i].e;
+
         // set initial interval
         if (roh < 0) {
             if (i == 0) {
-                a = D[i] - normZ;
+                a = di - normZ;
                 int j = 0;
                 while(secularEquation(a, roh, z, D, n) < 0) {
                     a -= normZ;
                     assert(++j < 100);
                 }
             } else {
-                a = D[i-1];
+                a = SD[i-1].e;
             }
-            b = D[i];
+            b = di;
         } else {
-            a = D[i];
+            a = di;
             if (i == n-1) {
-                b = D[i] + normZ;
+                b = di + normZ;
                 int j = 0;
                 while(secularEquation(b, roh, z, D, n) < 0) {
                     b += normZ;
                     assert(++j < 100);
                 }
             } else {
-                b = D[i+1];
+                b = SD[i+1].e;
             }
         }
 
@@ -92,7 +121,7 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
             else
                 b = lambda;
         }
-        L[i] = lambda;
+        L[ind] = lambda;
     }
 
     return L;
