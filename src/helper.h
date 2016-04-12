@@ -75,4 +75,12 @@ void printVector(double* vec, int n);
  */
 void printTridiagonalMatrix(double* D, double* E, int n);
 
+/**
+ * @brief printMatrix Print general matrix
+ * @param M Matrix
+ * @param r Number of rows
+ * @param c Number of columns
+ */
+void printMatrix(double* M, int r, int c);
+
 #endif // HELPER_H

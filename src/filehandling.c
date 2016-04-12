@@ -162,7 +162,7 @@ int writeResults(const char* filename, double* OD, double* OE, double* D, double
     }
 
     double norm, lambda;
-    int i,j,k;
+    int i,j;
     double *x = malloc(n * sizeof(double));
 
     // current eigenvector

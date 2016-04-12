@@ -43,7 +43,7 @@ double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta) {
     int i;
     #pragma omp parallel for default(shared) private(i) schedule(static)
     for(i = 0; i < nq2; ++i)
-        z[nq1+i] = Q2f[i] * theta;
+        z[nq1+i] = Q2f[i] / theta;
 
     return z;
 }
@@ -83,3 +83,11 @@ void printTridiagonalMatrix(double* D, double* E, int n) {
         printf("0\t%g\t%g\n", E[n-2], D[n-1]);
     }
 }
+
+void printMatrix(double* M, int r, int c) {
+    int i;
+    for (i = 0; i < r; ++i) {
+        printVector(M+i*c,c);
+    }
+}
+

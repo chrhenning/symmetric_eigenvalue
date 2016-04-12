@@ -47,6 +47,16 @@ int main (int argc, char **argv)
     // Note, even if a copy wastes memory, it's much faster then reading the matrix again from file later on when we need it
     double *OD, *OE;
 
+    // store vector z for rank-one update
+    double* z = NULL;
+    // store eigenvalues in here
+    double* L = NULL;
+    // store normalization factors in this vector, which are used to normalize the eigenvectors
+    double* N = NULL;
+
+    // for time measurements
+    double tic, toc;
+
     // name of output file
     char* outputfile = NULL;
 
@@ -61,7 +71,8 @@ int main (int argc, char **argv)
         // no parameters are given, thus print usage hints and close programm
         if (argc == 1) {
             showHelp();
-            MPI_ABORT(MPI_COMM_WORLD, 0);
+            endProgram = 1;
+            goto StartOfAlgorithm;
         }
 
         char* inputfile = NULL;
@@ -191,7 +202,7 @@ int main (int argc, char **argv)
      **********************
      **********************/
 
-    double tic = omp_get_wtime();
+    tic = omp_get_wtime();
 
     MPI_Bcast(&n,1,MPI_INT,MASTER,MPI_COMM_WORLD);
 
@@ -379,13 +390,6 @@ int main (int argc, char **argv)
     int nq1 = nl, nq2;
     double *Q2f = NULL, *Q2l = NULL;
 
-    // store vector z for rank-one update
-    double* z = NULL;
-    // store eigenvalues in here
-    double* L = NULL;
-    // store normalization factors in this vector, which are used to normalize the eigenvectors
-    double* N = NULL;
-
     // note: modulus is actually still 1, but just as a reminder
     modulus = 1;
 
@@ -511,8 +515,8 @@ int main (int argc, char **argv)
 
     EndOfAlgorithm:
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    double toc = omp_get_wtime();
+    //MPI_Barrier(MPI_COMM_WORLD);
+    toc = omp_get_wtime();
     if (taskid == MASTER) {
 
         printf("\n");
@@ -528,6 +532,7 @@ int main (int argc, char **argv)
                 // use D,z,L,N
                 assert(Q == NULL);
             }
+
             writeResults(outputfile,OD,OE,D,z,L,N,Q,n);
         }
 
@@ -539,6 +544,8 @@ int main (int argc, char **argv)
             free(N);
         }
         free(D);
+        free(OD);
+        free(OE);
     }
 
     MPI_FINALIZE();

@@ -61,7 +61,7 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
      * Simple Bisection algorithm
      * ****************/
     long maxIter = 10000;
-    double eps = 1e-10;
+    double eps = 1e-14;
     /*
     N ← 1
     While N ≤ NMAX # limit iterations to prevent infinite loop
@@ -111,17 +111,24 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
 
         int j = 0;
         while (++j < maxIter) {
+            double fa = secularEquation(a, roh, z, D, n);
+            double flambda = secularEquation(lambda, roh, z, D, n);
+            double fb = secularEquation(b, roh, z, D, n);
+            //if (j==1)
+                //printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
+
             lambda = (a+b) / 2;
-            if (secularEquation(lambda, roh, z, D, n) == 0 || (b-a)/2 < eps)
+            if (flambda == 0 || (b-a)/2 < eps)
                 break;
 
             // if sign(a) == sign(lambda)
-            if ((a >= 0 && lambda >= 0) || (a < 0 && lambda < 0))
+            if ((fa >= 0 && flambda >= 0) || (fa < 0 && flambda < 0))
                 a = lambda;
             else
                 b = lambda;
         }
         L[ind] = lambda;
+        //printf("%g\n", secularEquation(lambda, roh, z, D, n));
     }
 
     return L;
