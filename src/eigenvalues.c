@@ -79,14 +79,9 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
         double lambda = 0;
         double a, b; // interval boundaries
         double fa, flambda, fb; // function values
-        double inf=1.0/0.0;
 
         int ind = SD[i].i;
         double di = SD[i].e;
-
-        // initial function values are in +/- infinity, depending on the gradiend of the secular equation
-        fa = (roh > 0 ? -inf : inf);
-        fb = (roh > 0 ? inf : -inf);
 
         // set initial interval
         if (roh < 0) {
@@ -97,7 +92,6 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                     a -= normZ;
                     assert(++j < 100);
                 }
-                fa = secularEquation(a, roh, z, D, n);
             } else {
                 a = SD[i-1].e;
             }
@@ -111,21 +105,31 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                     b += normZ;
                     assert(++j < 100);
                 }
-                fb = secularEquation(a, roh, z, D, n);
             } else {
                 b = SD[i+1].e;
             }
         }
 
-        // initial values
-        lambda = (a+b) / 2;        
-        flambda = secularEquation(lambda, roh, z, D, n);
-
         int j = 0;
         while (++j < maxIter) {
 
-            if (j==10)
-                printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
+            // new lambda
+            lambda = (a+b) / 2;
+            // compute current function values
+            fa = secularEquation(a, roh, z, D, n);
+            flambda = secularEquation(lambda, roh, z, D, n);
+            //fb = secularEquation(b, roh, z, D, n);
+
+            // if a function value is inf, then it has probably not the right sign
+            // initial function values are in +/- infinity, depending on the gradiend of the secular equation
+            if (fa == INFINITY || fa == -INFINITY)
+                fa = (roh > 0 ? -INFINITY : INFINITY);
+
+            //if (fb == INFINITY || fb == -INFINITY)
+            //   fb = (roh > 0 ? INFINITY : -INFINITY);
+
+            //if (j==10)
+            //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
             if (flambda == 0 || (b-a)/2 < eps)
                 break;
@@ -135,16 +139,9 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                 a = lambda;
             else
                 b = lambda;
-
-            // next lambda
-            lambda = (a+b) / 2;
-            // compute next function values
-            fa = secularEquation(a, roh, z, D, n);
-            flambda = secularEquation(lambda, roh, z, D, n);
-            fb = secularEquation(b, roh, z, D, n);
         }
         L[ind] = lambda;
-        printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n));
+        //printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n));
     }
 
     return L;
