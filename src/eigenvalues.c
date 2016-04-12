@@ -111,13 +111,14 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
 
         int j = 0;
         while (++j < maxIter) {
+            lambda = (a+b) / 2;
+
             double fa = secularEquation(a, roh, z, D, n);
             double flambda = secularEquation(lambda, roh, z, D, n);
             double fb = secularEquation(b, roh, z, D, n);
-            //if (j==1)
-                //printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
+            if (j==10)
+                printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
-            lambda = (a+b) / 2;
             if (flambda == 0 || (b-a)/2 < eps)
                 break;
 
@@ -128,7 +129,7 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                 b = lambda;
         }
         L[ind] = lambda;
-        //printf("%g\n", secularEquation(lambda, roh, z, D, n));
+        printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n));
     }
 
     return L;
