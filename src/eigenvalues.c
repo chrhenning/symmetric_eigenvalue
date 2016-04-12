@@ -78,9 +78,15 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
     for (i = 0; i < n; ++i) { // for each eigenvalue
         double lambda = 0;
         double a, b; // interval boundaries
+        double fa, flambda, fb; // function values
+        double inf=1.0/0.0;
 
         int ind = SD[i].i;
         double di = SD[i].e;
+
+        // initial function values are in +/- infinity, depending on the gradiend of the secular equation
+        fa = (roh > 0 ? -inf : inf);
+        fb = (roh > 0 ? inf : -inf);
 
         // set initial interval
         if (roh < 0) {
@@ -91,6 +97,7 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                     a -= normZ;
                     assert(++j < 100);
                 }
+                fa = secularEquation(a, roh, z, D, n);
             } else {
                 a = SD[i-1].e;
             }
@@ -104,17 +111,15 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
                     b += normZ;
                     assert(++j < 100);
                 }
+                fb = secularEquation(a, roh, z, D, n);
             } else {
                 b = SD[i+1].e;
             }
         }
 
         // initial values
-        lambda = (a+b) / 2;
-        double inf=1.0/0.0;
-        double fa = (roh > 0 ? -inf : inf);
-        double flambda = secularEquation(lambda, roh, z, D, n);
-        double fb = (roh > 0 ? inf : -inf);
+        lambda = (a+b) / 2;        
+        flambda = secularEquation(lambda, roh, z, D, n);
 
         int j = 0;
         while (++j < maxIter) {
