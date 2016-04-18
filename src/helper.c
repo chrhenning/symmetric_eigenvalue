@@ -16,7 +16,7 @@ void createMatrixScheme1(double** D, double** E, int n) {
         (*E)[i] = -1; // off diagonal
         (*D)[i] = 1.0 + i * diagSpacing;
     }
-    (*D)[n-1] = 1.0 + i * diagSpacing; // one more diagonal element than off diagonal elements
+    (*D)[n-1] = 1.0 + (n-1) * diagSpacing; // one more diagonal element than off diagonal elements
 }
 
 void createMatrixScheme2(double **D, double **E, int n) {
@@ -77,10 +77,10 @@ void printTridiagonalMatrix(double* D, double* E, int n) {
     }
     else {
         int i = 0;
-        printf("%g\t%g\t0\n", D[0], E[0]);
-        for (i = 1; i < n-2; ++i)
+        printf("0\t%g\t%g\n", D[0], E[0]);
+        for (i = 1; i < n-1; ++i)
             printf("%g\t%g\t%g\n", E[i-1], D[i], E[i]);
-        printf("0\t%g\t%g\n", E[n-2], D[n-1]);
+        printf("%g\t%g\t0\n", E[n-2], D[n-1]);
     }
 }
 

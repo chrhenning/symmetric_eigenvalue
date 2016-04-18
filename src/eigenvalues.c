@@ -41,6 +41,9 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
     double roh = beta * theta;
     assert(roh != 0);
 
+    printVector(z,n);
+    printVector(D,n);
+
     // copy and sort diagonal elements
     struct diagElem* SD = malloc(n * sizeof(struct diagElem));
     int i;
