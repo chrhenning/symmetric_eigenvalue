@@ -34,3 +34,7 @@ run:
 runo: run
 	cat $(OUT)
 	
+runc: cuppen run
+	
+runoc: cuppen runo
+	

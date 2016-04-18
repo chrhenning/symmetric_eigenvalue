@@ -532,8 +532,8 @@ int main (int argc, char **argv)
      **********************/
 
     EndOfAlgorithm:
+    printf("Task %d reached this point\n", taskid);
 
-    //MPI_Barrier(MPI_COMM_WORLD);
     toc = omp_get_wtime();
     if (taskid == MASTER) {
 
@@ -555,17 +555,21 @@ int main (int argc, char **argv)
         }
 
         if (numSplitStages == 0) {
+            assert(z == NULL && L == NULL && N == NULL && Q != NULL);
             free(Q);
         } else {
+            assert(z != NULL && L != NULL && N != NULL && Q == NULL);
             free(z);
             free(L);
             free(N);
         }
+        assert(D != NULL && OD != NULL && OE != NULL);
         free(D);
         free(OD);
         free(OE);
     }
 
+    MPI_Barrier(MPI_COMM_WORLD);
     MPI_FINALIZE();
     return 0;
 }
