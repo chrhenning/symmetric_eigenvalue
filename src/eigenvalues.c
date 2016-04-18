@@ -146,6 +146,8 @@ double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, d
         //printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n));
     }
 
+    free(SD);
+
 //    printVector(z,n);
 //    printVector(D,n);
 //    printVector(L,n);
