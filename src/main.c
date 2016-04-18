@@ -365,6 +365,7 @@ int main (int argc, char **argv)
     /**********************
      * Compute eigenpairs of leaves using QR algorithm
      **********************/
+
     if (taskid == MASTER)
         printf("Apply QR algorithm on leaves ...\n");
     // TODO. make depth of tree big enough to assure that dense matrix Q of leaves can be stored (thus probably split T even on nodes itself)
@@ -374,6 +375,7 @@ int main (int argc, char **argv)
 
     int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q, nl);
     assert(ret == 0);
+
     // off-diagonal elements are not needed anymore
     myfree(&E);
     assert(E == NULL);
@@ -494,11 +496,14 @@ int main (int argc, char **argv)
                 for (j = 0; j < nq1; ++j)
                     Wf[i] += Q1f[j] * getEVElement(D,z,L,N,nq1+nq2,i,j);
                 Wl[i] = 0;
-                for (j = 0; j < nq1; ++j)
+                for (j = 0; j < nq2; ++j)
                     Wl[i] += Q2l[j] * getEVElement(D,z,L,N,nq1+nq2,i,nq1+j);
             }
-
-
+//            if (s==0) {
+//                printVector(Wf, nq1+nq2);
+//                printVector(Wl, nq1+nq2);
+//                goto EndOfAlgorithm;
+//            }
             myfree(&Q1f);
             myfree(&Q1l);
             myfree(&Q2f);
@@ -511,7 +516,8 @@ int main (int argc, char **argv)
             Wf = NULL;
             Wl = NULL;
 
-            //myfree(&D);
+            memcpy(D, L, nq1*sizeof(double)); // FIXME: no copying
+
             myfree(&z);
             myfree(&L);
             myfree(&N);
