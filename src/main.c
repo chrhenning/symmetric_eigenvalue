@@ -314,19 +314,28 @@ int main (int argc, char **argv)
             n1 += max(0, min(sizeRemainder-taskid, modulus/2));
             n2 += max(0, min(sizeRemainder-rightChild[s], numLeavesRight));
 
-            //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, taskid + modulus/2, n2);
+            // if right child does not exist (we could catch this earlier, but I just wanna make sure here that everything works as I expect)
+            if (rightChild[s] >= numtasks) {
+                rightChild[s] = -1;
+                parent[s] = -1;
+                assert(n2 == 0);
+            } else {
+                assert(n2 > 0);
 
-            // save beta for later conquer phase and modify diagonal elements
-            betas[s] = E[n1-1];
-            // modify last diagonal element of T1
-            D[n1-1] -= thetas[s] * betas[s];
-            // modify first diagonal element of T2
-            D[n1] -= 1.0/thetas[s] * betas[s];
+                printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
 
-            // send size and second half of matrix
-            MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
-            MPI_Send(D+n1, n2, MPI_DOUBLE, rightChild[s], 2, MPI_COMM_WORLD);
-            MPI_Send(E+n1, n2-1, MPI_DOUBLE, rightChild[s], 3, MPI_COMM_WORLD);
+                // save beta for later conquer phase and modify diagonal elements
+                betas[s] = E[n1-1];
+                // modify last diagonal element of T1
+                D[n1-1] -= thetas[s] * betas[s];
+                // modify first diagonal element of T2
+                D[n1] -= 1.0/thetas[s] * betas[s];
+
+                // send size and second half of matrix
+                MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
+                MPI_Send(D+n1, n2, MPI_DOUBLE, rightChild[s], 2, MPI_COMM_WORLD);
+                MPI_Send(E+n1, n2-1, MPI_DOUBLE, rightChild[s], 3, MPI_COMM_WORLD);
+            }
         }
 
         // if task is receiver of a subtree in this step
@@ -396,10 +405,10 @@ int main (int argc, char **argv)
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
     assert(numSplitStages > 0);
     for (s = numSplitStages-1; modulus < maxModulus; s--) {
-        assert(parent[s] != -1);
+        // the tree is not completely balanced, so there might be tasks, that haven't performed a split at stage s (parent[s] == -1)
 
         // if task should not compute the spectral decomposition of two leaves
-        if (parent[s] != taskid) {
+        if (parent[s] != -1 && parent[s] != taskid) {
             assert(parent[s] == (taskid - modulus));
             //printf("%d send ...\n", taskid);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
@@ -431,6 +440,8 @@ int main (int argc, char **argv)
             Q2l = malloc(nq2 * sizeof(double));
             MPI_Recv(Q2f, nq2, MPI_DOUBLE, rightChild[s], 6, MPI_COMM_WORLD, &status);
             MPI_Recv(Q2l, nq2, MPI_DOUBLE, rightChild[s], 7, MPI_COMM_WORLD, &status);
+
+            printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, rightChild[s], nq2);
 
             /*
              * Compute z, where z is
