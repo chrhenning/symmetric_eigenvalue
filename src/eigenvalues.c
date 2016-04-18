@@ -32,7 +32,9 @@ inline double secularEquation(double lambda, double roh, double* z, double* D, i
     return 1+roh*sum;
 }
 
-double* computeEigenvalues(double* D, double* z, int n, double beta, double theta) {
+double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, double theta) {
+    int* G = malloc(n * sizeof(int));
+    *Gp = G;
     /*
      * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
      */
@@ -151,7 +153,7 @@ double* computeEigenvalues(double* D, double* z, int n, double beta, double thet
     return L;
 }
 
-double* computeNormalizationFactors(double* D, double* z, double* L, int n) {
+double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int n) {
     double *N = malloc(n * sizeof(double));
 
     int i, j;
