@@ -457,10 +457,11 @@ int main (int argc, char **argv)
 
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-            L = computeEigenvalues(D, z, nq1+nq2, betas[s], thetas[s]);
+            int* tmp; // FIXME
+            L = computeEigenvalues(D, z, &tmp, nq1+nq2, betas[s], thetas[s]);
 
             // compute normalization factors
-            N = computeNormalizationFactors(D,z,L,nq1+nq2);
+            N = computeNormalizationFactors(D,z,L, NULL,nq1+nq2);
 
             /*
              * It holds that T = W L W^T, where W = QU
@@ -494,10 +495,10 @@ int main (int argc, char **argv)
             for (i = 0; i < nq1+nq2; ++i) {
                 Wf[i] = 0;
                 for (j = 0; j < nq1; ++j)
-                    Wf[i] += Q1f[j] * getEVElement(D,z,L,N,nq1+nq2,i,j);
+                    Wf[i] += Q1f[j] * getEVElement(D,z,L,N, NULL,nq1+nq2,i,j);
                 Wl[i] = 0;
                 for (j = 0; j < nq2; ++j)
-                    Wl[i] += Q2l[j] * getEVElement(D,z,L,N,nq1+nq2,i,nq1+j);
+                    Wl[i] += Q2l[j] * getEVElement(D,z,L,N, NULL,nq1+nq2,i,nq1+j);
             }
 //            if (s==0) {
 //                printVector(Wf, nq1+nq2);

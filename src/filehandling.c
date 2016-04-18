@@ -180,7 +180,7 @@ int writeResults(const char* filename, double* OD, double* OE, double* D, double
         } else {
             #pragma omp parallel for default(shared) private(j) schedule(static)
             for (j = 0; j < n; ++j) {
-                xi[j] = getEVElement(D,z,L,N,n,i,j);
+                xi[j] = getEVElement(D,z,L,N, NULL,n,i,j);
             }
             lambda = L[i];
         }
