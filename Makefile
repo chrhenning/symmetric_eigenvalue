@@ -21,3 +21,6 @@ cuppen: $(OBJs)
 	
 clean:
 	rm -f $(OBJ_NAME)
+
+run: 
+	mpirun -n 4 -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s 1 -n 12 out.txt
