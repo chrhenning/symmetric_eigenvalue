@@ -10,6 +10,7 @@
 #include "helper.h"
 #include "filehandling.h"
 #include "eigenvalues.h"
+//#include "backtransformation.h"
 
 #define MASTER 0
 
@@ -251,6 +252,9 @@ int main (int argc, char **argv)
         numSplitStages++;
     }
     modulus = maxModulus;
+    //EVRepTree evTree = initEVRepTree(numSplitStages+1, numtasks);
+
+    //freeEVRepTree(&evTree);
 
     // at each split that we perform, we have to keep track of the lost beta entry
     /*
@@ -316,9 +320,15 @@ int main (int argc, char **argv)
 
             // if right child does not exist (we could catch this earlier, but I just wanna make sure here that everything works as I expect)
             if (rightChild[s] >= numtasks) {
-                rightChild[s] = -1;
-                parent[s] = -1;
-                assert(n2 == 0);
+                assert(n2 == 0 || s < numSplitStages-1);
+                if (n2 > 0) { // we don't split the tree here, so we are going down the tree along a single path to the next stage
+                    rightChild[s] = taskid;
+                    parent[s] = taskid;
+                } else {
+                    rightChild[s] = -1;
+                    parent[s] = -1;
+                }
+
             } else {
                 assert(n2 > 0);
 
@@ -407,7 +417,7 @@ int main (int argc, char **argv)
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
     assert(numSplitStages > 0);
     for (s = numSplitStages-1; modulus < maxModulus; s--) {
-        // the tree is not completely balanced, so there might be tasks, that haven't performed a split at stage s (parent[s] == -1)
+        // the tree is not completely balanced, so there might be tasks, that haven't performed a split at the bottom stage s (parent[s] == -1)
 
         // if task should not compute the spectral decomposition of two leaves
         if (parent[s] != -1 && parent[s] != taskid) {
@@ -430,8 +440,9 @@ int main (int argc, char **argv)
 
 
         // if task combines two splits in this stage
-        if (parent[s] == taskid) {
-            assert(rightChild[s] == (taskid + modulus));
+        // Note: if rightChild[s] == taskid, then the tree was not splitted in this stage (single path)
+        assert(parent[s] != taskid || (rightChild[s] == taskid || rightChild[s] == (taskid + modulus)));
+        if (parent[s] == taskid && rightChild[s] == (taskid + modulus)) {
             //printf("%d receive ...\n", taskid);
             // receive size of matrix to receive
             MPI_Recv(&nq2, 1, MPI_INT, rightChild[s], 4, MPI_COMM_WORLD, &status);
@@ -532,7 +543,6 @@ int main (int argc, char **argv)
      **********************/
 
     EndOfAlgorithm:
-    printf("Task %d reached this point\n", taskid);
 
     toc = omp_get_wtime();
     if (taskid == MASTER) {
