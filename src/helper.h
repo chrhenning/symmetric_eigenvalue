@@ -83,4 +83,6 @@ void printTridiagonalMatrix(double* D, double* E, int n);
  */
 void printMatrix(double* M, int r, int c);
 
+
+
 #endif // HELPER_H

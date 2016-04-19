@@ -10,7 +10,7 @@
 #include "helper.h"
 #include "filehandling.h"
 #include "eigenvalues.h"
-//#include "backtransformation.h"
+#include "backtransformation.h"
 
 #define MASTER 0
 
@@ -48,12 +48,8 @@ int main (int argc, char **argv)
     // Note, even if a copy wastes memory, it's much faster then reading the matrix again from file later on when we need it
     double *OD, *OE;
 
-    // store vector z for rank-one update
-    double* z = NULL;
-    // store eigenvalues in here
-    double* L = NULL;
-    // store normalization factors in this vector, which are used to normalize the eigenvectors
-    double* N = NULL;
+    // helper variable to easily access current node in tree
+    EVRepNode* currNode = NULL;
 
     // for time measurements
     double tic, toc;
@@ -246,27 +242,29 @@ int main (int argc, char **argv)
     // find smallest power of two greater than numtasks
     int modulus = 1;
     int maxModulus = 1;
-    int numSplitStages = 0; // number of tree levels where splits are performed
+    // depth of the tree, thus the tree has 'depth' stages with at maximum 2^(depth-1) leaves
+    int treeDepth = 1;
     while (maxModulus < numtasks) {
         maxModulus *= 2;
-        numSplitStages++;
+        treeDepth++;
     }
     modulus = maxModulus;
-    //EVRepTree evTree = initEVRepTree(numSplitStages+1, numtasks);
+    // helper variable
+    int numSplitStages = treeDepth-1; // number of stages, where splits are performed
 
-    //freeEVRepTree(&evTree);
-
-    // at each split that we perform, we have to keep track of the lost beta entry
     /*
-     * Since there are less than log(numtaks) stages, I allocate more the betas than necessary
-     * (note, actually not each task performs a split on each stage)
+     * In this struct we store the whole information to reconstruct the eigenvectors.
+     * Thus, for each node in the tree, the struct must store the information of
+     * either the whole eigenvector matrix of its T (if leave node) or the vectors
+     * representing the eigenvector matrix of the rank-one perturbation of its T,
+     * where T is the tridiagonal matrix assigned to a node in the tree.
+     *
+     * Of course, each of these eigenvector matrix representation is only stored in one task.
+     * If it's not stored on the current node, then we store at least the taskid, which knows,
+     * where it is stored for all our child nodes.
+     * Hence, only the MASTER node (root of tree) can reconstruct the whole eigenvector matrix.
      */
-    int betas[numSplitStages];
-    int thetas[numSplitStages];
-    // TODO: choose meaningful values of theta
-    #pragma omp parallel for default(shared) private(i) schedule(static)
-    for (i = 0; i < numSplitStages; ++i)
-        thetas[i] = 1;
+    EVRepTree evTree = initEVRepTree(treeDepth, numtasks);
 
     // If this task performs a split, then it stores the taskid of the right child in this array (the left child is the task itself)
     // If there is no split, then the value is -1
@@ -300,6 +298,7 @@ int main (int argc, char **argv)
     // stage in divide tree
     int s = 0;
     for (s = 0; modulus > 1; s++) {
+        assert(s < treeDepth);
 
         // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
         if (taskid % modulus == 0) {
@@ -334,12 +333,18 @@ int main (int argc, char **argv)
 
                 printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
 
+                // get current node in tree
+                currNode = accessNode(&evTree, s, taskid);
+
+                // at each split that we perform, we have to keep track of the lost beta entry
                 // save beta for later conquer phase and modify diagonal elements
-                betas[s] = E[n1-1];
+                currNode->beta = E[n1-1];
+                // TODO: choose more meaningful theta
+                currNode->theta = 1;
                 // modify last diagonal element of T1
-                D[n1-1] -= thetas[s] * betas[s];
+                D[n1-1] -= currNode->theta * currNode->beta;
                 // modify first diagonal element of T2
-                D[n1] -= 1.0/thetas[s] * betas[s];
+                D[n1] -= 1.0/currNode->theta * currNode->beta;
 
                 // send size and second half of matrix
                 MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
@@ -380,26 +385,46 @@ int main (int argc, char **argv)
         printf("Apply QR algorithm on leaves ...\n");
     // TODO. make depth of tree big enough to assure that dense matrix Q of leaves can be stored (thus probably split T even on nodes itself)
 
-    // orthonormal where the columns are eigenvectors
-    double* Q = malloc(nl*nl * sizeof(double));
+    // get current leaf node in tree
+    currNode = &(evTree.t[treeDepth-1].s[taskid]);
+    currNode->n = nl;
 
-    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, D, E, Q, nl);
+    // assign D to leaf node
+    if (n > nl) {
+        /* since we have to store all D's anyway, we don't wanna store an array that is bigger than
+         * necessary. We could have shrinked D in the splitting step before, but
+         * that would have probably caused even more copy operations
+         */
+        currNode->D = malloc(nl*nl * sizeof(double));
+        memcpy(currNode->D, D, nl*sizeof(double));
+        myfree(&D);
+    } else {
+        assert(nl == n);
+        currNode->D = D;
+        D = NULL;
+    }
+
+    // orthonormal where the columns are eigenvectors
+    currNode->Q = malloc(nl*nl * sizeof(double));
+
+    int ret =  LAPACKE_dsteqr(LAPACK_ROW_MAJOR, 'I', nl, currNode->D, E, currNode->Q, nl);
     assert(ret == 0);
+
+    // reset D to L
+    currNode->L = currNode->D;
+    currNode->D = NULL;
 
     // off-diagonal elements are not needed anymore
     myfree(&E);
     assert(E == NULL);
 
     // upper stage in the tree only needs first and last line (as explained later)
-    // FIXME: Is there a better way than copying the already existing rows?
-    double* Q1f = malloc(nl * sizeof(double)); // first row
-    double* Q1l = malloc(nl * sizeof(double)); // last row
-    memcpy(Q1f, Q, nl*sizeof(double));
-    memcpy(Q1l, Q+(nl-1)*nl, nl*sizeof(double));
-    // if there was not a single split, then we need the eigenvectors stored in Q
+    double* Q1f = currNode->Q; // first row
+    double* Q1l = currNode->Q + (nl-1)*nl; // last row
+
+    // if there was not a single split, then we only need the eigenvectors stored in Q
     if (numSplitStages == 0)
         goto EndOfAlgorithm;
-    myfree(&Q);
 
     /**********************
      * Conquer phase
@@ -425,14 +450,18 @@ int main (int argc, char **argv)
             //printf("%d send ...\n", taskid);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
             MPI_Send(&nq1, 1, MPI_INT, parent[s], 4, MPI_COMM_WORLD);
-            MPI_Send(D, nq1, MPI_DOUBLE, parent[s], 5, MPI_COMM_WORLD);
+            MPI_Send(currNode->L, nq1, MPI_DOUBLE, parent[s], 5, MPI_COMM_WORLD);
             MPI_Send(Q1f, nq1, MPI_DOUBLE, parent[s], 6, MPI_COMM_WORLD);
             MPI_Send(Q1l, nq1, MPI_DOUBLE, parent[s], 7, MPI_COMM_WORLD);
 
             // this task can't be the master, so there is no work left to do for it
-            myfree(&Q1f);
-            myfree(&Q1l);
-            myfree(&D);
+            if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+                myfree(&Q1f);
+                myfree(&Q1l);
+            } else {
+                Q1f = NULL;
+                Q1l = NULL;
+            }
 
             // this task does not perform any merges anymore
             goto EndOfAlgorithm;
@@ -443,12 +472,20 @@ int main (int argc, char **argv)
         // Note: if rightChild[s] == taskid, then the tree was not splitted in this stage (single path)
         assert(parent[s] != taskid || (rightChild[s] == taskid || rightChild[s] == (taskid + modulus)));
         if (parent[s] == taskid && rightChild[s] == (taskid + modulus)) {
+            // get current node in tree
+            EVRepNode* leftChild = currNode;
+            assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);
+            currNode = accessNode(&evTree, s, taskid);
+
             //printf("%d receive ...\n", taskid);
             // receive size of matrix to receive
             MPI_Recv(&nq2, 1, MPI_INT, rightChild[s], 4, MPI_COMM_WORLD, &status);
+            currNode->n = nq1+nq2;
+            currNode->D = malloc(currNode->n * sizeof(double));
+            memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
 
             // receive eigenvalues and necessary part of eigenvectors from right child in tree
-            MPI_Recv(D+nq1, nq2, MPI_DOUBLE, rightChild[s], 5, MPI_COMM_WORLD, &status);
+            MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, rightChild[s], 5, MPI_COMM_WORLD, &status);
             Q2f = malloc(nq2 * sizeof(double));
             Q2l = malloc(nq2 * sizeof(double));
             MPI_Recv(Q2f, nq2, MPI_DOUBLE, rightChild[s], 6, MPI_COMM_WORLD, &status);
@@ -464,15 +501,14 @@ int main (int argc, char **argv)
              *
              * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
              */
-            z = computeZ(Q1l, Q2f, nq1, nq2, thetas[s]);
+            currNode->z = computeZ(Q1l, Q2f, nq1, nq2, currNode->theta);
 
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-            int* tmp; // FIXME
-            L = computeEigenvalues(D, z, &tmp, nq1+nq2, betas[s], thetas[s]);
+            currNode->L = computeEigenvalues(currNode->D, currNode->z, &(currNode->G), currNode->n, currNode->beta, currNode->theta);
 
             // compute normalization factors
-            N = computeNormalizationFactors(D,z,L, NULL,nq1+nq2);
+            currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
 
             /*
              * It holds that T = W L W^T, where W = QU
@@ -490,8 +526,13 @@ int main (int argc, char **argv)
             if (s == 0) { // if we already reached root of tree
                 assert(taskid == MASTER);
                 // write eigenvalues into file
-                myfree(&Q1f);
-                myfree(&Q1l);
+                if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+                    myfree(&Q1f);
+                    myfree(&Q1l);
+                } else {
+                    Q1f = NULL;
+                    Q1l = NULL;
+                }
                 myfree(&Q2f);
                 myfree(&Q2l);
 
@@ -506,18 +547,23 @@ int main (int argc, char **argv)
             for (i = 0; i < nq1+nq2; ++i) {
                 Wf[i] = 0;
                 for (j = 0; j < nq1; ++j)
-                    Wf[i] += Q1f[j] * getEVElement(D,z,L,N, NULL,nq1+nq2,i,j);
+                    Wf[i] += Q1f[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,j);
                 Wl[i] = 0;
                 for (j = 0; j < nq2; ++j)
-                    Wl[i] += Q2l[j] * getEVElement(D,z,L,N, NULL,nq1+nq2,i,nq1+j);
+                    Wl[i] += Q2l[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,nq1+j);
             }
 //            if (s==0) {
 //                printVector(Wf, nq1+nq2);
 //                printVector(Wl, nq1+nq2);
 //                goto EndOfAlgorithm;
 //            }
-            myfree(&Q1f);
-            myfree(&Q1l);
+            if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+                myfree(&Q1f);
+                myfree(&Q1l);
+            } else {
+                Q1f = NULL;
+                Q1l = NULL;
+            }
             myfree(&Q2f);
             myfree(&Q2l);
 
@@ -527,12 +573,6 @@ int main (int argc, char **argv)
             Q1l = Wl;
             Wf = NULL;
             Wl = NULL;
-
-            memcpy(D, L, nq1*sizeof(double)); // FIXME: no copying
-
-            myfree(&z);
-            myfree(&L);
-            myfree(&N);
         }
 
         modulus *= 2;
@@ -551,33 +591,14 @@ int main (int argc, char **argv)
         printf("Elapsed time in %f seconds\n", toc-tic);
 
         if (outputfile != NULL) {
-            // TODO print file
-            // if no splits have been performed, thus there is no tree, eigenpairs have been computed by QR algorithm
-            if (numSplitStages == 0) {
-                // eigenvectors are in Q and eigenvalues in D
-                assert(z == NULL && L == NULL && N == NULL);
-            } else {
-                // use D,z,L,N
-                assert(Q == NULL);
-            }
+            // get root node
+            currNode = &(evTree.t[0].s[0]);
 
-            writeResults(outputfile,OD,OE,D,z,L,N,Q,n);
+            writeResults(outputfile,OD,OE,currNode->D,currNode->z,currNode->L,currNode->N,currNode->Q,currNode->n);
         }
-
-        if (numSplitStages == 0) {
-            assert(z == NULL && L == NULL && N == NULL && Q != NULL);
-            free(Q);
-        } else {
-            assert(z != NULL && L != NULL && N != NULL && Q == NULL);
-            free(z);
-            free(L);
-            free(N);
-        }
-        assert(D != NULL && OD != NULL && OE != NULL);
-        free(D);
-        free(OD);
-        free(OE);
     }
+
+    freeEVRepTree(&evTree);
 
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_FINALIZE();

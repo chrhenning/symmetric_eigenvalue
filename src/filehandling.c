@@ -176,14 +176,13 @@ int writeResults(const char* filename, double* OD, double* OE, double* D, double
             for (j = 0; j < n; ++j) {
                 xi[j] = Q[n*j + i];
             }
-            lambda = D[i];
         } else {
             #pragma omp parallel for default(shared) private(j) schedule(static)
             for (j = 0; j < n; ++j) {
                 xi[j] = getEVElement(D,z,L,N, NULL,n,i,j);
             }
-            lambda = L[i];
         }
+        lambda = L[i];
 
         // compute x = T*x_i, where x_i is the current eigenvector
         if (n == 1) {
