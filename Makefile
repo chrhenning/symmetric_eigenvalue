@@ -16,8 +16,25 @@ FLAGS=  -DMKL_ILP64 -qopenmp -I${MKLROOT}/include -O3
 #This is the target that compiles our executable 
 all : cuppen 
 	
-cuppen: $(OBJs)
+cuppen: $(OBJS)
 	$(CC_MPI) $(FLAGS) $(OBJS) -o $(OBJ_NAME) $(MKL)
 	
 clean:
 	rm -f $(OBJ_NAME)
+
+# this standard parameters will be overriden, if you call the Makefile and assign them as parameters
+NUMTASKS=4
+DIM=16
+OUT=out.txt
+SCHEME=1
+
+run: 
+	mpirun -n $(NUMTASKS) -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s $(SCHEME) -n $(DIM) $(OUT)
+
+runo: run
+	cat $(OUT)
+	
+runc: cuppen run
+	
+runoc: cuppen runo
+	
