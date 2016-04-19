@@ -52,7 +52,22 @@ double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, d
         SD[i].i = i;
     }
     qsort(SD, n, sizeof(struct diagElem), compare);
-
+    double eps = 1e-14;
+    
+    // calculate Givens rotation
+    /* G is a vector that keeps track of Givens rotation for SD 
+     * Since SD has been sorted ascendingly, we should always make the  off-diagonal 
+     * element that corresponds to the smaller diagonal element to be zero*/
+     
+    G[0] = -1;
+    #pragma omp parallel for default(shared) private(i) schedule(static)
+    for (i = 0; i < n - 1; i++){
+        if (fabs(SD[i + 1].e - SD[i].e) < eps)
+	   G[i + 1] = i;
+	else 
+	   G[i + 1] = -1;
+    }
+	   
     /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
      * If roh < 0, then the first eigenvalue is before the first d_i */
 
@@ -63,7 +78,6 @@ double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, d
      * Simple Bisection algorithm
      * ****************/
     long maxIter = 10000;
-    double eps = 1e-14;
     /*
     N ← 1
     While N ≤ NMAX # limit iterations to prevent infinite loop
