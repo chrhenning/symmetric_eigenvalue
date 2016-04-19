@@ -14,6 +14,9 @@ void initEVRepNode(EVRepNode* r) {
     r->G = NULL;
     r->beta = 0;
     r->theta = 0;
+    r->parent = NULL;
+    r->left = NULL;
+    r->right = NULL;
 }
 
 EVRepTree initEVRepTree(int depth, int numtasks) {
@@ -50,8 +53,20 @@ EVRepTree initEVRepTree(int depth, int numtasks) {
         // init all nodes
         int j;
         for (j = 0; j < n; ++j) {
-            initEVRepNode(&(t.t[s].s[j]));
-            t.t[s].s[j].taskid = j * h;
+            EVRepNode* curr = &(t.t[s].s[j]);
+            initEVRepNode(curr);
+            curr->taskid = j * h;
+            // set parent and child pointers
+            if (s > 0) {
+                curr->parent = &(t.t[s-1].s[j/2]);
+                if (j % 2 == 0) {
+                    curr->parent->left = curr;
+                    if (j == n-1) // no split, single path
+                        curr->parent->right = curr;
+                } else {
+                    curr->parent->right = curr;
+                }
+            }
         }
 
         p *= 2;

@@ -45,6 +45,20 @@ struct EVRepNodeStruct {
     int* G;
     double beta;
     double theta;
+
+    // internal information, to easily move along the tree
+    /**
+     * @brief parent Parent node in tree
+     */
+    struct EVRepNodeStruct* parent;
+    /**
+     * @brief left Left child of node
+     */
+    struct EVRepNodeStruct* left;
+    /**
+     * @brief right Right child of node
+     */
+    struct EVRepNodeStruct* right;
 };
 typedef struct EVRepNodeStruct EVRepNode;
 

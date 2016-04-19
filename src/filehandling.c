@@ -151,9 +151,14 @@ int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, do
     return 0;
 }
 
-int writeResults(const char* filename, double* OD, double* OE, double* D, double* z, double* L, double* N, double* Q, int n) {
+int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPIHandle comm) {
 
+    assert(t->d > 0 && t->t[0].n == 1);
+    // get root node
+    EVRepNode* root = &(t->t[0].s[0]);
+    int n = root->n;
     assert(n > 0);
+
     FILE *f;
 
     if ((f = fopen(filename, "w")) == NULL) {
@@ -169,51 +174,51 @@ int writeResults(const char* filename, double* OD, double* OE, double* D, double
     double* xi = malloc(n * sizeof(double));
 
     // for each eigenvalue
-    for (i = 0; i < n; ++i) {
-        // extract current eigenvector
-        if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
-            #pragma omp parallel for default(shared) private(j) schedule(static)
-            for (j = 0; j < n; ++j) {
-                xi[j] = Q[n*j + i];
-            }
-        } else {
-            #pragma omp parallel for default(shared) private(j) schedule(static)
-            for (j = 0; j < n; ++j) {
-                xi[j] = getEVElement(D,z,L,N, NULL,n,i,j);
-            }
-        }
-        lambda = L[i];
+//    for (i = 0; i < n; ++i) {
+//        // extract current eigenvector
+//        if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
+//            #pragma omp parallel for default(shared) private(j) schedule(static)
+//            for (j = 0; j < n; ++j) {
+//                xi[j] = Q[n*j + i];
+//            }
+//        } else {
+//            #pragma omp parallel for default(shared) private(j) schedule(static)
+//            for (j = 0; j < n; ++j) {
+//                xi[j] = getEVElement(t,comm,L,N, NULL,n,i,j);
+//            }
+//        }
+//        lambda = L[i];
 
-        // compute x = T*x_i, where x_i is the current eigenvector
-        if (n == 1) {
-            x[0] = OD[0] * xi[0];
-        } else {
-            x[0] = OD[0] * xi[0] + OE[0] * xi[1];
-            #pragma omp parallel for default(shared) private(j) schedule(static)
-            for (j = 1; j < n-1; ++j) {
-                x[j] = OE[j-1] * xi[j-1] + OD[j] * xi[j] + OE[j] * xi[j+1];
-            }
-            x[n-1] = OE[n-2] * xi[n-2] + OD[n-1] * xi[n-1];
-        }
+//        // compute x = T*x_i, where x_i is the current eigenvector
+//        if (n == 1) {
+//            x[0] = OD[0] * xi[0];
+//        } else {
+//            x[0] = OD[0] * xi[0] + OE[0] * xi[1];
+//            #pragma omp parallel for default(shared) private(j) schedule(static)
+//            for (j = 1; j < n-1; ++j) {
+//                x[j] = OE[j-1] * xi[j-1] + OD[j] * xi[j] + OE[j] * xi[j+1];
+//            }
+//            x[n-1] = OE[n-2] * xi[n-2] + OD[n-1] * xi[n-1];
+//        }
 
-        norm = 0;
-        // compute ||x - lambda_i*x_i||
-        #pragma omp parallel for default(shared) private(j) schedule(static) reduction(+:norm)
-        for (j = 0; j < n; ++j) {
-            x[j] -= lambda * xi[j];
-            norm = norm + x[j]*x[j];
-        }
-        norm = sqrt(norm);
+//        norm = 0;
+//        // compute ||x - lambda_i*x_i||
+//        #pragma omp parallel for default(shared) private(j) schedule(static) reduction(+:norm)
+//        for (j = 0; j < n; ++j) {
+//            x[j] -= lambda * xi[j];
+//            norm = norm + x[j]*x[j];
+//        }
+//        norm = sqrt(norm);
 
-        // compute norm of x
-        //norm = cblas_dnrm2(n, x, 1);
+//        // compute norm of x
+//        //norm = cblas_dnrm2(n, x, 1);
 
-        // write results to file
-        fprintf(f, "%20.19g %20.19g\n", lambda, norm);
-    }
+//        // write results to file
+//        fprintf(f, "%20.19g %20.19g\n", lambda, norm);
+//    }
 
-    free(xi);
-    free(x);
+//    free(xi);
+//    free(x);
 
     if (f !=stdout) fclose(f);
 

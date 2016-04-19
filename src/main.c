@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <omp.h>
 #include <assert.h>
-#include "mpi.h"
 #include "mkl.h"
 
 #include "helper.h"
@@ -30,6 +29,12 @@ int main (int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
     MPI_Get_processor_name(hostname, &len);
+
+    // store information, necessary to use MPI, in extra struct, that we can pass to function calls
+    MPIHandle mpiHandle;
+    mpiHandle.comm = MPI_COMM_WORLD;
+    mpiHandle.numtasks = numtasks;
+    mpiHandle.taskid = taskid;
 
     // we don't want to use nested parallelism, because it yields to worse results, if it is not controlled by any intelligence
     omp_set_nested(0);
@@ -505,7 +510,7 @@ int main (int argc, char **argv)
 
             // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
             // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-            currNode->L = computeEigenvalues(currNode->D, currNode->z, &(currNode->G), currNode->n, currNode->beta, currNode->theta);
+            currNode->L = computeEigenvalues(currNode->D, currNode->z, &(currNode->G), currNode->n, currNode->beta, currNode->theta, mpiHandle);
 
             // compute normalization factors
             currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
@@ -586,16 +591,17 @@ int main (int argc, char **argv)
 
     toc = omp_get_wtime();
     if (taskid == MASTER) {
-
         printf("\n");
         printf("Elapsed time in %f seconds\n", toc-tic);
+    }
 
-        if (outputfile != NULL) {
-            // get root node
-            currNode = &(evTree.t[0].s[0]);
-
-            writeResults(outputfile,OD,OE,currNode->D,currNode->z,currNode->L,currNode->N,currNode->Q,currNode->n);
+    if (outputfile != NULL) {
+        if (taskid == MASTER) {
+            printf("\n");
+            printf("Write results to file ...\n");
         }
+
+        writeResults(outputfile,OD,OE,&evTree, mpiHandle);
     }
 
     freeEVRepTree(&evTree);

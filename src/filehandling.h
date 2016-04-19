@@ -1,6 +1,9 @@
 #ifndef FILEHANDLING_H
 #define FILEHANDLING_H
 
+#include "helper.h"
+#include "backtransformation.h"
+
 /**
  * @brief readBandedMatrixFromSparseMTX Read a tridiagonal matrix from a file
  * @param filename Name of a file, which contains a sparse matrix in mtx format
@@ -42,6 +45,6 @@ int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, do
  * was applied. In this case Q == NULL. If no splitting was performed (because T is too small to divide the problem),
  * then Q will contain the eigenvectors, where Q is the results of MKL's QR algorithm.
  */
-int writeResults(const char* filename, double* OD, double* OE, double* D, double* z, double* L, double* N, double* Q, int n);
+int writeResults(const char* filename, double* OD, double* OE, EVRepTree *t, MPIHandle comm);
 
 #endif // FILEHANDLING_H

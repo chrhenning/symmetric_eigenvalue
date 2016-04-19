@@ -2,6 +2,7 @@
 #define HELPER_H
 
 #include <stdlib.h>
+#include "mpi.h"
 
 /*
  * This file contains a bunch of helper functions to keep the main file clearly arranged
@@ -82,6 +83,16 @@ void printTridiagonalMatrix(double* D, double* E, int n);
  * @param c Number of columns
  */
 void printMatrix(double* M, int r, int c);
+
+/**
+ * @brief The MPIHandleStruct struct In case we want to easily give the MPI abilities to a function, we can bundle the necessary variables here
+ */
+struct MPIHandleStruct {
+    int taskid;
+    int numtasks;
+    MPI_Comm comm;
+};
+typedef struct MPIHandleStruct MPIHandle;
 
 
 

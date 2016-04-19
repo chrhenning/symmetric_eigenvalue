@@ -5,8 +5,6 @@
 #include <assert.h>
 #include "mkl.h"
 
-#include "helper.h"
-
 /* When I sort the diagonal elements, I need a mapping back to the original order */
 struct diagElem {
     double e; // element
@@ -32,7 +30,7 @@ inline double secularEquation(double lambda, double roh, double* z, double* D, i
     return 1+roh*sum;
 }
 
-double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, double theta) {
+double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, double theta, MPIHandle mpiHandle) {
     int* G = malloc(n * sizeof(int));
     *Gp = G;
     /*
