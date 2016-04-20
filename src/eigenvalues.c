@@ -30,15 +30,38 @@ inline double secularEquation(double lambda, double roh, double* z, double* D, i
     return 1+roh*sum;
 }
 
-double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, double theta, MPIHandle mpiHandle) {
-    int* G = malloc(n * sizeof(int));
-    *Gp = G;
-    /*
-     * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
-     */
-    double* L = malloc(n * sizeof(double));
+void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
+    // abbreviations
+    int taskid = mpiHandle.taskid;
+    int numtasks = mpiHandle.numtasks;
 
-    double roh = beta * theta;
+    double* D = NULL;
+    double* z = NULL;
+    double* L = NULL;
+    int* G = NULL;
+    double roh;
+    int n;
+
+    if (taskid == node->taskid) {
+        node->G = malloc(n * sizeof(int));
+        /*
+         * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
+         */
+        node->L = malloc(n * sizeof(double));
+
+        D = node->D;
+        z = node->z;
+        L = node->L;
+        G = node->G;
+        roh = node->beta * node->theta;
+        n = node->n;
+    }
+
+    // we don't use parallelism yeet, so just return if other task
+    if (taskid != node->taskid) {
+        return;
+    }
+
     assert(roh != 0);
 
     // copy and sort diagonal elements
@@ -163,8 +186,6 @@ double* computeEigenvalues(double* D, double* z, int** Gp, int n, double beta, d
 //    printVector(z,n);
 //    printVector(D,n);
 //    printVector(L,n);
-
-    return L;
 }
 
 double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int n) {

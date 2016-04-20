@@ -448,23 +448,22 @@ int main (int argc, char **argv)
     int nq1 = nl, nq2;
     double *Q2f = NULL, *Q2l = NULL;
 
-    // note: modulus is actually still 1, but just as a reminder
-    modulus = 1;
-
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
     assert(numSplitStages > 0);
-    for (s = numSplitStages-1; modulus < maxModulus; s--) {
-        // the tree is not completely balanced, so there might be tasks, that haven't performed a split at the bottom stage s (parent[s] == -1)
+    for (s = numSplitStages-1; s >= 0; s--) {
+        currNode = currNode->parent;
+        assert(currNode != NULL);
+        // the tree is not completely balanced, so there might be tasks, that haven't performed a split at the bottom stage s
 
         // if task should not compute the spectral decomposition of two leaves
-        if (parent[s] != -1 && parent[s] != taskid) {
-            assert(parent[s] == (taskid - modulus));
-            //printf("%d send ...\n", taskid);
+        if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
+
+
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
-            MPI_Send(&nq1, 1, MPI_INT, parent[s], 4, MPI_COMM_WORLD);
-            MPI_Send(currNode->L, nq1, MPI_DOUBLE, parent[s], 5, MPI_COMM_WORLD);
-            MPI_Send(Q1f, nq1, MPI_DOUBLE, parent[s], 6, MPI_COMM_WORLD);
-            MPI_Send(Q1l, nq1, MPI_DOUBLE, parent[s], 7, MPI_COMM_WORLD);
+            MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
+            MPI_Send(currNode->right->L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
+            MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
+            MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
 
             // this task can't be the master, so there is no work left to do for it
             if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
@@ -481,113 +480,116 @@ int main (int argc, char **argv)
 
 
         // if task combines two splits in this stage
-        // Note: if rightChild[s] == taskid, then the tree was not splitted in this stage (single path)
-        assert(parent[s] != taskid || (rightChild[s] == taskid || rightChild[s] == (taskid + modulus)));
-        if (parent[s] == taskid && rightChild[s] == (taskid + modulus)) {
-            // get current node in tree
-            EVRepNode* leftChild = currNode;
-            assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);
-            currNode = accessNode(&evTree, s, taskid);
+        // Note: if right == left, then the tree was not splitted in this stage (single path)
+        if (currNode->right != currNode->left) {
+            // for all tasks, that are leaves of the current node, they can work in parallel on the root finding problem
+            if (taskid >= currNode->taskid && taskid < (currNode->taskid+currNode->numLeaves)) {
+                if (currNode->taskid == taskid) {
+                    // get current node in tree
+                    EVRepNode* leftChild = currNode->left;
+                    assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);
 
-            //printf("%d receive ...\n", taskid);
-            // receive size of matrix to receive
-            MPI_Recv(&nq2, 1, MPI_INT, rightChild[s], 4, MPI_COMM_WORLD, &status);
-            assert(currNode->n == nq1+nq2);
-            currNode->D = malloc(currNode->n * sizeof(double));
-            memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
+                    // receive size of matrix to receive
+                    MPI_Recv(&nq2, 1, MPI_INT, currNode->right->taskid, 4, MPI_COMM_WORLD, &status);
+                    assert(currNode->n == nq1+nq2);
+                    currNode->D = malloc(currNode->n * sizeof(double));
+                    memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
 
-            // receive eigenvalues and necessary part of eigenvectors from right child in tree
-            MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, rightChild[s], 5, MPI_COMM_WORLD, &status);
-            Q2f = malloc(nq2 * sizeof(double));
-            Q2l = malloc(nq2 * sizeof(double));
-            MPI_Recv(Q2f, nq2, MPI_DOUBLE, rightChild[s], 6, MPI_COMM_WORLD, &status);
-            MPI_Recv(Q2l, nq2, MPI_DOUBLE, rightChild[s], 7, MPI_COMM_WORLD, &status);
+                    // receive eigenvalues and necessary part of eigenvectors from right child in tree
+                    MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, currNode->right->taskid, 5, MPI_COMM_WORLD, &status);
+                    Q2f = malloc(nq2 * sizeof(double));
+                    Q2l = malloc(nq2 * sizeof(double));
+                    MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
+                    MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
 
-            printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, rightChild[s], nq2);
+                    printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
-            /*
-             * Compute z, where z is
-             *
-             * z = | Q1^T   0 | | e_k            |
-             *     | 0   Q2^T | | theta^-1 * e_1 |
-             *
-             * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
-             */
-            currNode->z = computeZ(Q1l, Q2f, nq1, nq2, currNode->theta);
-
-            // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
-            // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-            currNode->L = computeEigenvalues(currNode->D, currNode->z, &(currNode->G), currNode->n, currNode->beta, currNode->theta, mpiHandle);
-
-            // compute normalization factors
-            currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
-
-            /*
-             * It holds that T = W L W^T, where W = QU
-             * We only have to compute the first and last row of W and send it to the parent
-             *
-             * left child: the parent needs the last row of W (which is Q1 in parent) to compute z.
-             * To compute the last row of W we only need the last row of Q (last row of Q2)
-             *
-             * right child: the parent needs the first row of W (which is Q2 in parent) to compute z.
-             * To compute the first row of W we only need the first row of Q (first row of Q1)
-             *
-             * But, the parent has (if s > 1) to compute the last and first row of its W again, so it needs
-             * also the first row of its Q1 from its left child resp. the last row of its Q2 from the right child
-             */
-            if (s == 0) { // if we already reached root of tree
-                assert(taskid == MASTER);
-                // write eigenvalues into file
-                if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
-                    myfree(&Q1f);
-                    myfree(&Q1l);
-                } else {
-                    Q1f = NULL;
-                    Q1l = NULL;
+                    /*
+                     * Compute z, where z is
+                     *
+                     * z = | Q1^T   0 | | e_k            |
+                     *     | 0   Q2^T | | theta^-1 * e_1 |
+                     *
+                     * Note, I only need the last row of Q1 and the first row of Q2 in order to compute z
+                     */
+                    currNode->z = computeZ(Q1l, Q2f, nq1, nq2, currNode->theta);
                 }
-                myfree(&Q2f);
-                myfree(&Q2l);
 
-                goto EndOfAlgorithm;
+                // compute root finding in parrallel
+                // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
+                // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
+                computeEigenvalues(currNode, mpiHandle);
+
+                if (currNode->taskid == taskid) {
+                    // compute normalization factors
+                    currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
+
+                    /*
+                     * It holds that T = W L W^T, where W = QU
+                     * We only have to compute the first and last row of W and send it to the parent
+                     *
+                     * left child: the parent needs the last row of W (which is Q1 in parent) to compute z.
+                     * To compute the last row of W we only need the last row of Q (last row of Q2)
+                     *
+                     * right child: the parent needs the first row of W (which is Q2 in parent) to compute z.
+                     * To compute the first row of W we only need the first row of Q (first row of Q1)
+                     *
+                     * But, the parent has (if s > 1) to compute the last and first row of its W again, so it needs
+                     * also the first row of its Q1 from its left child resp. the last row of its Q2 from the right child
+                     */
+                    if (s == 0) { // if we already reached root of tree
+                        assert(taskid == MASTER);
+                        // write eigenvalues into file
+                        if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+                            myfree(&Q1f);
+                            myfree(&Q1l);
+                        } else {
+                            Q1f = NULL;
+                            Q1l = NULL;
+                        }
+                        myfree(&Q2f);
+                        myfree(&Q2l);
+
+                        goto EndOfAlgorithm;
+                    }
+
+                    // compute first and last row of W
+                    double* Wf = malloc((nq1+nq2) * sizeof(double)); // first line of W
+                    double* Wl = malloc((nq1+nq2) * sizeof(double)); // last line of W
+
+                    #pragma omp parallel for default(shared) private(i,j) schedule(static)
+                    for (i = 0; i < nq1+nq2; ++i) {
+                        Wf[i] = 0;
+                        for (j = 0; j < nq1; ++j)
+                            Wf[i] += Q1f[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,j);
+                        Wl[i] = 0;
+                        for (j = 0; j < nq2; ++j)
+                            Wl[i] += Q2l[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,nq1+j);
+                    }
+        //            if (s==0) {
+        //                printVector(Wf, nq1+nq2);
+        //                printVector(Wl, nq1+nq2);
+        //                goto EndOfAlgorithm;
+        //            }
+                    if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+                        myfree(&Q1f);
+                        myfree(&Q1l);
+                    } else {
+                        Q1f = NULL;
+                        Q1l = NULL;
+                    }
+                    myfree(&Q2f);
+                    myfree(&Q2l);
+
+                    // update variables for next iteration
+                    nq1 = nq1 + nq2;
+                    Q1f = Wf;
+                    Q1l = Wl;
+                    Wf = NULL;
+                    Wl = NULL;
+                }
             }
-
-            // compute first and last row of W
-            double* Wf = malloc((nq1+nq2) * sizeof(double)); // first line of W
-            double* Wl = malloc((nq1+nq2) * sizeof(double)); // last line of W
-
-            #pragma omp parallel for default(shared) private(i,j) schedule(static)
-            for (i = 0; i < nq1+nq2; ++i) {
-                Wf[i] = 0;
-                for (j = 0; j < nq1; ++j)
-                    Wf[i] += Q1f[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,j);
-                Wl[i] = 0;
-                for (j = 0; j < nq2; ++j)
-                    Wl[i] += Q2l[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,nq1+j);
-            }
-//            if (s==0) {
-//                printVector(Wf, nq1+nq2);
-//                printVector(Wl, nq1+nq2);
-//                goto EndOfAlgorithm;
-//            }
-            if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
-                myfree(&Q1f);
-                myfree(&Q1l);
-            } else {
-                Q1f = NULL;
-                Q1l = NULL;
-            }
-            myfree(&Q2f);
-            myfree(&Q2l);
-
-            // update variables for next iteration
-            nq1 = nq1 + nq2;
-            Q1f = Wf;
-            Q1l = Wl;
-            Wf = NULL;
-            Wl = NULL;
         }
-
-        modulus *= 2;
     }
 
     /**********************

@@ -1,6 +1,7 @@
 #ifndef EIGENVALUES_H
 #define EIGENVALUES_H
 
+#include "backtransformation.h"
 #include "helper.h"
 /*
  * Handle eigenvalue and eigenvector computation of rank-one updated matrix D + roh * z*z^T in this file
@@ -17,7 +18,7 @@
  * @param mpiHandle Allows you to use the capabilities of MPI in this function, to share the root finding task with other nodes
  * @return Array of size n where entry i is the eigenvalue correspondending to diagonal entry d_i in D.
  */
-double* computeEigenvalues(double* D, double* z, int** G, int n, double beta, double theta, MPIHandle mpiHandle);
+void computeEigenvalues(EVRepNode *node, MPIHandle mpiHandle);
 
 /**
  * @brief computeNormalizationFactors Compute the normalization factors for the eigenvector construction
