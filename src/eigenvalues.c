@@ -185,3 +185,8 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
 
     return N;
 }
+
+double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j) {
+    // TODO: return unit vector, if z is zero at position j (otherwise D[j]-L[i] might change)
+    return (z[j] / ((D[j]-L[i]) * N[i]));
+}

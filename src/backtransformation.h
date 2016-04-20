@@ -59,6 +59,14 @@ struct EVRepNodeStruct {
      * @brief right Right child of node
      */
     struct EVRepNodeStruct* right;
+    /**
+     * @brief o Offset in current stage: the sum of node sizes for all nodes left to this one (this information is sometimes valuable, since nodes can have different sizes)
+     */
+    int o;
+    /**
+     * @brief numLeaves The number of leaf nodes that are children of the current node (e.g. the root has numtasks children)
+     */
+    int numLeaves;
 };
 typedef struct EVRepNodeStruct EVRepNode;
 
@@ -102,9 +110,10 @@ typedef struct EVRepTreeStruct EVRepTree;
  * @brief initEVRepTree Initialize a binary tree with given depth and leaf nodes
  * @param depth Depth of tree
  * @param numtasks Number of leaf nodes
+ * @param n Size of original tridiagonal system
  * @return The initialized struct, with all the allocated memory.
  */
-EVRepTree initEVRepTree(int depth, int numtasks);
+EVRepTree initEVRepTree(int depth, int numtasks, int n);
 
 /**
  * @brief freeEVRepTree Free allocated memory in given tree (also the contained EV matrices

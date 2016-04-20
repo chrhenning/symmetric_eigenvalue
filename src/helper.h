@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include "mpi.h"
 
+#define MASTER 0
+
 /*
  * This file contains a bunch of helper functions to keep the main file clearly arranged
  */

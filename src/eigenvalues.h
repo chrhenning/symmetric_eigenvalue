@@ -46,7 +46,7 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int* G, int
  *
  * The element is computed as follows: z_j / ((d_j-lambda_i) * N[i])
  */
-inline double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j) { return z[j] / ((D[j]-L[i]) * N[i]); }
+double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j);
 
 
 #endif // EIGENVALUES_H

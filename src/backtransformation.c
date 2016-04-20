@@ -17,9 +17,11 @@ void initEVRepNode(EVRepNode* r) {
     r->parent = NULL;
     r->left = NULL;
     r->right = NULL;
+    r->o = 0;
+    r->numLeaves = 0;
 }
 
-EVRepTree initEVRepTree(int depth, int numtasks) {
+EVRepTree initEVRepTree(int depth, int numtasks, int n) {
     EVRepTree t;
     t.d = depth;
     t.t = malloc(t.d * sizeof(EVRepStage));
@@ -71,6 +73,38 @@ EVRepTree initEVRepTree(int depth, int numtasks) {
 
         p *= 2;
     }
+
+    /*
+     * initialize node sizes in tree (and offsets, number of leaf nodes)
+     */
+    // Note, our goal is to have equally sized leaves
+    int leafSize, sizeRemainder;
+    leafSize = n / numtasks;
+    sizeRemainder = n % numtasks;
+
+    int offset = 0;
+    int i,j;
+    for (i = 0; i < numtasks; ++i) {
+        t.t[t.d-1].s[i].n = leafSize + (i < sizeRemainder ? 1 : 0);
+        t.t[t.d-1].s[i].o = offset;
+        offset += t.t[t.d-1].s[i].n;
+        t.t[t.d-1].s[i].numLeaves = 1;
+    }
+    for (i = t.d-2; i >= 0; --i){
+        offset = 0;
+        for (j = 0; j < t.t[i].n; ++j) {
+            if (t.t[i].s[j].left == t.t[i].s[j].right) {
+                t.t[i].s[j].n = t.t[i].s[j].left->n;
+                t.t[i].s[j].numLeaves = t.t[i].s[j].left->numLeaves;
+            } else {
+                t.t[i].s[j].n = t.t[i].s[j].left->n + t.t[i].s[j].right->n;
+                t.t[i].s[j].numLeaves = t.t[i].s[j].left->numLeaves + t.t[i].s[j].right->numLeaves;
+            }
+            t.t[i].s[j].o = offset;
+            offset += t.t[i].s[j].n;
+        }
+    }
+    assert(t.t[0].s[0].numLeaves == numtasks);
 
     return t;
 }

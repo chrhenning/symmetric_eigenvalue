@@ -29,21 +29,23 @@ int readTriadiagonalMatrixFromSparseMTX(const char* filename, double **T, int *n
 int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, double **E, int *n);
 
 /**
- * @brief writeResults Write the results to an outputfile where each line has the form "lambda_i ||T*xi - lambda_i*xi||
+ * @brief writeResults Write the results to an outputfile where each line has the form "lambda_i ||T*xi - lambda_i*xi||, if xi should be computed, otherwise only the eigenvalue
  * @param filename Name of file
  * @param OD Array with diagonal elements of original matrix T
  * @param OE Array with off-diagonal elements of original matrix T (size n-1)
- * @param D Diagonal elements
- * @param z Vector z
- * @param L Eigenvalues lambda_i
- * @param N Normalization factors
- * @param Q Square matrix of order n with eigenvectors as columns
- * @param n Size of D,z,L,N, OD
- * @return 0, if write process was successful
+ * @param t The tree, that stores all the eigenvector matrix represenatitions for the curren task
+ * @param comm The MPI handle with the information neccessary to allow inter-task communication
  *
- * D,z,L,N are the vectors that results from the rank-1 update in the highest stage, if Cuppen's algorithm (thus splitting of T)
- * was applied. In this case Q == NULL. If no splitting was performed (because T is too small to divide the problem),
- * then Q will contain the eigenvectors, where Q is the results of MKL's QR algorithm.
+ * To access eigenvectors, we need to compute columns of the matrix
+ * W = Q * U_(d-2) * ... * U_1 * U_0, where Q is the block diagonal matrix
+ * with the dense eigenvector matrices from the leaf nodes. The U_i's are the block diagonal
+ * matrices, which are the eigenvector matrices of the rank-one perturbation int the intermediate
+ * stage i. (Stage 0 is root, stage (d-1) is leaf).
+ *
+ * Let's define U = Q * U_(d-2) * ... * U_1
+ * To compute the j-th column in W, we have to multiply the i-th row from U (1<=i<=n)
+ * with the j-th column from U_0.
+ * This algorithm will compute the rows of U in parallel.
  */
 int writeResults(const char* filename, double* OD, double* OE, EVRepTree *t, MPIHandle comm);
 

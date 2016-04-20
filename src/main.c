@@ -11,8 +11,6 @@
 #include "eigenvalues.h"
 #include "backtransformation.h"
 
-#define MASTER 0
-
 void showHelp();
 
 int main (int argc, char **argv)
@@ -61,6 +59,7 @@ int main (int argc, char **argv)
 
     // name of output file
     char* outputfile = NULL;
+    int writeOutput = 0; // flag
 
     // some indices to use in for loops
     int i,j,k;
@@ -138,8 +137,10 @@ int main (int argc, char **argv)
         else
             printf("Use a matrix of scheme %d with dimension %d\n", usedScheme, n);
 
-        if (outputfile != NULL)
+        if (outputfile != NULL) {
+            writeOutput = 1;
             printf("Output file: %s\n", outputfile);
+        }
 
 
         /**********************
@@ -193,6 +194,8 @@ int main (int argc, char **argv)
         MPI_Finalize();
         return 0;
     }
+
+    MPI_Bcast(&writeOutput,1,MPI_INT,MASTER,MPI_COMM_WORLD);
 
     MPI_Barrier(MPI_COMM_WORLD);
     printf("   Task %d is running on node %s, which has %d available processors.\n", taskid, hostname, omp_get_num_procs());
@@ -269,7 +272,9 @@ int main (int argc, char **argv)
      * where it is stored for all our child nodes.
      * Hence, only the MASTER node (root of tree) can reconstruct the whole eigenvector matrix.
      */
-    EVRepTree evTree = initEVRepTree(treeDepth, numtasks);
+    EVRepTree evTree = initEVRepTree(treeDepth, numtasks, n);
+    if (taskid == MASTER)
+        assert(evTree.t[0].s[0].n == n);
 
     // If this task performs a split, then it stores the taskid of the right child in this array (the left child is the task itself)
     // If there is no split, then the value is -1
@@ -293,7 +298,7 @@ int main (int argc, char **argv)
     MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     // the actual leafsize of the current task
-    int nl = leafSize + (taskid < sizeRemainder ? 1 : 0);
+    int nl = leafSize + (taskid < sizeRemainder ? 1 : 0); // FIXME: delete me (stored in tree)
     // helper variables
     // size of T in left resp. right subtree
     int n1,n2;
@@ -340,6 +345,8 @@ int main (int argc, char **argv)
 
                 // get current node in tree
                 currNode = accessNode(&evTree, s, taskid);
+                assert(s == 0 || parent[s-1] == currNode->parent->taskid);
+                assert(rightChild[s] == currNode->right->taskid);
 
                 // at each split that we perform, we have to keep track of the lost beta entry
                 // save beta for later conquer phase and modify diagonal elements
@@ -392,7 +399,7 @@ int main (int argc, char **argv)
 
     // get current leaf node in tree
     currNode = &(evTree.t[treeDepth-1].s[taskid]);
-    currNode->n = nl;
+    assert(currNode->n == nl);
 
     // assign D to leaf node
     if (n > nl) {
@@ -485,7 +492,7 @@ int main (int argc, char **argv)
             //printf("%d receive ...\n", taskid);
             // receive size of matrix to receive
             MPI_Recv(&nq2, 1, MPI_INT, rightChild[s], 4, MPI_COMM_WORLD, &status);
-            currNode->n = nq1+nq2;
+            assert(currNode->n == nq1+nq2);
             currNode->D = malloc(currNode->n * sizeof(double));
             memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
 
@@ -595,12 +602,13 @@ int main (int argc, char **argv)
         printf("Elapsed time in %f seconds\n", toc-tic);
     }
 
-    if (outputfile != NULL) {
+    if (writeOutput) {
         if (taskid == MASTER) {
             printf("\n");
             printf("Write results to file ...\n");
         }
 
+        MPI_Barrier(MPI_COMM_WORLD);
         writeResults(outputfile,OD,OE,&evTree, mpiHandle);
     }
 
