@@ -40,11 +40,13 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     double* z = NULL;
     double* L = NULL;
     int* G = NULL;
+    int* P = NULL;
     double roh;
     int n;
 
     if (taskid == node->taskid) {
 	node->G = malloc(n * sizeof(int));
+    node->P = malloc(n * sizeof(int));
 	/*
 	 * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
 	 */
@@ -54,6 +56,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 	z = node->z;
 	L = node->L;
 	G = node->G;
+    P = node->P;
 	roh = node->beta * node->theta;
 	n = node->n;
     }
@@ -227,4 +230,17 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
 double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j) {
     // TODO: return unit vector, if z is zero at position j (otherwise D[j]-L[i] might change)
     return (z[j] / ((D[j]-L[i]) * N[i]));
+}
+
+void getEigenVector(EVRepNode *node, double* ev, int i) {
+    double* D = node->D;
+    double* z = node->z;
+    double* L = node->L;
+    double* N = node->N;
+    int* G = node->G;
+    int* P = node->P;
+    double roh = node->beta * node->theta;
+    int n = node->n;
+
+    // TODO compute i-th eigenvector and store in ev
 }
