@@ -21,7 +21,7 @@ int compare( const void* a, const void* b)
     else return 1;
 }
 
-inline double secularEquation(double lambda, double roh, double* z, double* D, int n, double* G) {
+inline double secularEquation(double lambda, double roh, double* z, double* D, int n, int* G) {
     double sum = 0;
     int i;
 #pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)

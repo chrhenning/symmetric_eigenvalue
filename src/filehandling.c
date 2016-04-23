@@ -317,12 +317,12 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     #pragma omp parallel private(r,c) // parallel region to ensure, that each thread has another array allocated for the eigenvector
                                     {
                                         // store c-th eigenvector of U
-                                        double* ev = malloc(currNode->n * sizeof(double));
+                                        double* ev = malloc(tcn->n * sizeof(double));
 
                                         #pragma omp for
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
-                                            getEigenVector(currNode, ev, c);
+                                            getEigenVector(tcn, ev, c);
 
                                             rj[tcn->o+c] = 0;
                                             for (r = 0; r < pn; ++r) {
