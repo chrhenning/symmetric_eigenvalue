@@ -47,6 +47,10 @@ struct EVRepNodeStruct {
      * @brief P Permutation
      */
     int* P;
+    /**
+     * @brief numGR Number of applied Given's Rotations
+     */
+    int numGR;
 
     double beta;
     double theta;
