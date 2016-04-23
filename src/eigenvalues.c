@@ -46,7 +46,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
     if (taskid == node->taskid) {
 	node->G = malloc(n * sizeof(int));
-    node->P = malloc(n * sizeof(int));
+	node->P = malloc(n * sizeof(int));
 	/*
 	 * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
 	 */
@@ -56,7 +56,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 	z = node->z;
 	L = node->L;
 	G = node->G;
-    P = node->P;
+	P = node->P;
 	roh = node->beta * node->theta;
 	n = node->n;
     }
@@ -139,7 +139,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 		} else {
 		    prevNonZeroIdx = i - 1;
 		    while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the first element is zero into consideration
-		    prevNonZeroIdx = prevNonZeroIdx - 1;
+			prevNonZeroIdx = prevNonZeroIdx - 1;
 		    a = SD[prevNonZeroIdx].e;
 		}
 		b = di;
@@ -155,7 +155,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 		} else {
 		    prevNonZeroIdx = i + 1;
 		    while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the last element is zero into consideration
-		    prevNonZeroIdx = prevNonZeroIdx + 1;
+			prevNonZeroIdx = prevNonZeroIdx + 1;
 		    b = SD[prevNonZeroIdx].e;
 		}
 	    }
@@ -243,4 +243,19 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     int n = node->n;
 
     // TODO compute i-th eigenvector and store in ev
+    int j;
+    if(G[i] > 0) {
+	for (j = 0; j < n; j++) {
+	    if (j == i){
+		ev[j] = 1;
+	    } else {
+		ev[j] = 0;
+	    }
+	}
+    } else {
+	for (j = 0; j < n; j ++) 
+	    ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+    }
+
+
 }
