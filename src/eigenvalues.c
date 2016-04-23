@@ -59,6 +59,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 	P = node->P;
 	roh = node->beta * node->theta;
 	n = node->n;
+	node->numGR = 0;
     }
 
     // we don't use parallelism yet, so just return if other task
@@ -86,8 +87,11 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
 #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n - 1; i++){
-	if (fabs(SD[i + 1].e - SD[i].e) < eps)
+	if (fabs(SD[i + 1].e - SD[i].e) < eps) {
 	    G[SD[i].i] = SD[i + 1].i;
+	    P[node->numGR] = SD[i].i;
+	    node->numGR++;
+	}
 	else 
 	    G[SD[i].i] = -1;
     }
@@ -241,6 +245,10 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     int* P = node->P;
     double roh = node->beta * node->theta;
     int n = node->n;
+    int numGR = node->numGR;
+    double r, s, c;
+    int a, b
+	double tmpi, tmpj;
 
     // TODO compute i-th eigenvector and store in ev
     int j;
@@ -257,5 +265,17 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 	    ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
     }
 
+#pragma omp parallel for default(shared) private(j) schedule(static)
+    for (j = numGR - 1; j >= 0 ; j--) {
+	a = P[j];     
+	b = G[a]; 
+	r = sqrt(z[a] * z[a] + z[b] * z[b]);
+	c = z[b] / r;
+	s = z[a] / r;
+	tmpi = c * ev[a] + s * ev[b];
+	tmpj = -s * ev[a] + c * ev[b];
+	ev[a] = tmpi;
+	ev[b] = tmpj;
 
+    }
 }
