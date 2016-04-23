@@ -192,6 +192,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 	}
     }
 
+
     free(SD);
 
     //    printVector(z,n);
