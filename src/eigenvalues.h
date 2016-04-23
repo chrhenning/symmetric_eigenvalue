@@ -33,22 +33,6 @@ void computeEigenvalues(EVRepNode *node, MPIHandle mpiHandle);
  */
 double* computeNormalizationFactors(double* D, double* z, double* L, int* G, int n);
 
-/**
- * @brief getEVElement Get an entry j from eigenvector i
- * @param D Diagonal elements
- * @param z Vector z
- * @param L Eigenvalues lambda_i
- * @param N Normalization factors
- * @param G Vector of Given's rotation (i,j)
- * @param n Size of D,z,L,N
- * @param i Considered eigenvector
- * @param j Considered entry in i-th eigenvector
- * @return  Entry j of eigenvector i
- *
- * The element is computed as follows: z_j / ((d_j-lambda_i) * N[i])
- */
-double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j);
-
 void getEigenVector(EVRepNode *node, double* ev, int i);
 
 

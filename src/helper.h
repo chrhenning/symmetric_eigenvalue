@@ -96,6 +96,21 @@ struct MPIHandleStruct {
 };
 typedef struct MPIHandleStruct MPIHandle;
 
+/**
+ * @brief The DiagElemStruct When I sort a vector and I need a mapping back to the original indices
+ */
+struct DiagElemStruct {
+    double e; // element
+    int i; // index
+};
+typedef struct DiagElemStruct DiagElem;
 
+/**
+ * @brief compareDiagElem Comparator for two DiagElem
+ * @param a
+ * @param b
+ * @return
+ */
+int compareDiagElem( const void* a, const void* b);
 
 #endif // HELPER_H
