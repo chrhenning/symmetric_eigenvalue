@@ -313,11 +313,21 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     // compute rj*U_ts
                                     memcpy(rjTemp+po, rj+po, pn*sizeof(double));
                                     int r, c;
-                                    #pragma omp parallel for default(shared) private(r,c) schedule(static)
-                                    for (c = 0; c < tcn->n; ++c) {
-                                        rj[tcn->o+c] = 0;
-                                        for (r = 0; r < pn; ++r) {
-                                            rj[tcn->o+c] += rjTemp[po+r] * getEVElement(tcn->D,tcn->z,tcn->L,tcn->N,tcn->G,tcn->n,c,ro+r);
+
+                                    #pragma omp parallel private(r,c) // parallel region to ensure, that each thread has another array allocated for the eigenvector
+                                    {
+                                        // store c-th eigenvector of U
+                                        double* ev = malloc(currNode->n * sizeof(double));
+
+                                        #pragma omp for
+                                        for (c = 0; c < tcn->n; ++c) {
+                                            // get c-th eigenvector of U
+                                            getEigenVector(currNode, ev, c);
+
+                                            rj[tcn->o+c] = 0;
+                                            for (r = 0; r < pn; ++r) {
+                                                rj[tcn->o+c] += rjTemp[po+r] * ev[ro+r];
+                                            }
                                         }
                                     }
                                 }

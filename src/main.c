@@ -557,14 +557,25 @@ int main (int argc, char **argv)
                     double* Wf = malloc((nq1+nq2) * sizeof(double)); // first line of W
                     double* Wl = malloc((nq1+nq2) * sizeof(double)); // last line of W
 
-                    #pragma omp parallel for default(shared) private(i,j) schedule(static)
-                    for (i = 0; i < nq1+nq2; ++i) {
-                        Wf[i] = 0;
-                        for (j = 0; j < nq1; ++j)
-                            Wf[i] += Q1f[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,j);
-                        Wl[i] = 0;
-                        for (j = 0; j < nq2; ++j)
-                            Wl[i] += Q2l[j] * getEVElement(currNode->D,currNode->z,currNode->L,currNode->N,currNode->G,currNode->n,i,nq1+j);
+                    #pragma omp parallel private(i,j) // parallel region to ensure, that each thread has another array allocated for the eigenvector
+                    {
+                        // store i-th eigenvector of U
+                        double* ev = malloc(currNode->n * sizeof(double));
+
+                        #pragma omp for
+                        for (i = 0; i < nq1+nq2; ++i) {
+                            // get i-th eigenvector of U
+                            getEigenVector(currNode, ev, i);
+
+                            Wf[i] = 0;
+                            for (j = 0; j < nq1; ++j)
+                                Wf[i] += Q1f[j] * ev[j];
+                            Wl[i] = 0;
+                            for (j = 0; j < nq2; ++j)
+                                Wl[i] += Q2l[j] * ev[nq1+j];
+                        }
+
+                        free(ev);
                     }
         //            if (s==0) {
         //                printVector(Wf, nq1+nq2);

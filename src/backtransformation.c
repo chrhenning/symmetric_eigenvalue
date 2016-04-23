@@ -20,6 +20,7 @@ void initEVRepNode(EVRepNode* r) {
     r->right = NULL;
     r->o = 0;
     r->numLeaves = 0;
+    r->numGR = 0;
 }
 
 EVRepTree initEVRepTree(int depth, int numtasks, int n) {
