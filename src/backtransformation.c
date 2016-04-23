@@ -12,6 +12,7 @@ void initEVRepNode(EVRepNode* r) {
     r->z = NULL;
     r->N = NULL;
     r->G = NULL;
+    r->P = NULL;
     r->beta = 0;
     r->theta = 0;
     r->parent = NULL;
@@ -120,9 +121,9 @@ void freeEVRepTree(EVRepTree* t) {
         for (j = 0; j < t->t[s].n; ++j) {
             EVRepNode* n = &(t->t[s].s[j]);
             if (n->taskid == -1) { // nothing to free
-                assert(n->Q == NULL && n->L == NULL && n->D == NULL && n->z == NULL && n->N == NULL && n->G == NULL);
+                assert(n->Q == NULL && n->L == NULL && n->D == NULL && n->z == NULL && n->N == NULL && n->G == NULL && n->P == NULL);
             } else if (n->Q != NULL) { // node is leaf node
-                assert(n->L != NULL && n->D == NULL && n->z == NULL && n->N == NULL && n->G == NULL);
+                assert(n->L != NULL && n->D == NULL && n->z == NULL && n->N == NULL && n->G == NULL && n->P == NULL);
                 free(n->Q);
                 free(n->L);
             } else {
@@ -132,6 +133,7 @@ void freeEVRepTree(EVRepTree* t) {
                 free(n->z);
                 free(n->N);
                 free(n->G);
+                free(n->P);
             }
         }
 

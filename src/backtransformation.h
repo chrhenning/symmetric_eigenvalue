@@ -43,6 +43,11 @@ struct EVRepNodeStruct {
      * @brief G Given's rotation
      */
     int* G;
+    /**
+     * @brief P Permutation
+     */
+    int* P;
+
     double beta;
     double theta;
 

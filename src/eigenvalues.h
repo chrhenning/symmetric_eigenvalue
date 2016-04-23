@@ -49,5 +49,7 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int* G, int
  */
 double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j);
 
+void getEigenVector(EVRepNode *node, double* ev, int i);
+
 
 #endif // EIGENVALUES_H
