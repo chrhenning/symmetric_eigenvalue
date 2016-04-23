@@ -5,22 +5,6 @@
 #include <assert.h>
 #include "mkl.h"
 
-/* When I sort the diagonal elements, I need a mapping back to the original order */
-struct diagElem {
-    double e; // element
-    int i; // index
-};
-
-int compare( const void* a, const void* b)
-{
-    struct diagElem e1 = * ( (struct diagElem*) a );
-    struct diagElem e2 = * ( (struct diagElem*) b );
-
-    if ( e1.e == e2.e ) return 0;
-    else if ( e1.e < e2.e ) return -1;
-    else return 1;
-}
-
 inline double secularEquation(double lambda, double roh, double* z, double* D, int n, int* G) {
     double sum = 0;
     int i;
@@ -70,14 +54,14 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     assert(roh != 0);
 
     // copy and sort diagonal elements
-    struct diagElem* SD = malloc(n * sizeof(struct diagElem));
+    DiagElem* SD = malloc(n * sizeof(DiagElem));
     int i;
 #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) {
 	SD[i].e = D[i];
 	SD[i].i = i;
     }
-    qsort(SD, n, sizeof(struct diagElem), compare);
+    qsort(SD, n, sizeof(DiagElem), compareDiagElem);
     double eps = 1e-14;
 
     // calculate Givens rotation
@@ -229,11 +213,6 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
     }
 
     return N;
-}
-
-double getEVElement(double* D, double* z, double* L, double* N, int* G, int n, int i, int j) {
-    // TODO: return unit vector, if z is zero at position j (otherwise D[j]-L[i] might change)
-    return (z[j] / ((D[j]-L[i]) * N[i]));
 }
 
 void getEigenVector(EVRepNode *node, double* ev, int i) {

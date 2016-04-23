@@ -91,3 +91,13 @@ void printMatrix(double* M, int r, int c) {
     }
 }
 
+int compareDiagElem( const void* a, const void* b)
+{
+    DiagElem e1 = * ( (DiagElem*) a );
+    DiagElem e2 = * ( (DiagElem*) b );
+
+    if ( e1.e == e2.e ) return 0;
+    else if ( e1.e < e2.e ) return -1;
+    else return 1;
+}
+

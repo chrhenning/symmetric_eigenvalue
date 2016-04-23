@@ -5,6 +5,25 @@
 #include "backtransformation.h"
 
 /**
+ * @brief The EVToComputeStruct struct The user may define in a file, which eigenvectors he wants to compute. We extract this information for the backtransformation in such a struct
+ */
+struct EVToComputeStruct {
+    /**
+     * @brief all Set to true, if all eigenvectors, should be computed.
+     */
+    int all;
+    /**
+     * @brief n Number of eigenvectors to compute
+     */
+    int n;
+    /**
+     * @brief indices Indices Indices of eigenvectors, we want to compute
+     */
+    int* indices;
+};
+typedef struct EVToComputeStruct EVToCompute;
+
+/**
  * @brief readBandedMatrixFromSparseMTX Read a tridiagonal matrix from a file
  * @param filename Name of a file, which contains a sparse matrix in mtx format
  * @param T Tridiagonal matrix in Intel banded row-major matrix format
@@ -27,6 +46,8 @@ int readTriadiagonalMatrixFromSparseMTX(const char* filename, double **T, int *n
  * Note, the matrix has to be a square matrix
  */
 int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, double **E, int *n);
+
+int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedEV, EVToCompute *ret);
 
 /**
  * @brief writeResults Write the results to an outputfile where each line has the form "lambda_i ||T*xi - lambda_i*xi||, if xi should be computed, otherwise only the eigenvalue

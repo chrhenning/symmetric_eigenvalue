@@ -59,6 +59,9 @@ int main (int argc, char **argv)
 
     // name of output file
     char* outputfile = NULL;
+    // name of the file, where the user defines which eigenvectors we are going to compute
+    char* evFile = NULL;
+    int computeEV = 0; // flag, if there should be any eigenvectors computed at the end
     int writeOutput = 0; // flag
 
     // some indices to use in for loops
@@ -88,7 +91,7 @@ int main (int argc, char **argv)
 
         opterr = 0;
 
-        while ((c = getopt (argc, argv, "hi:n:s:")) != -1)
+        while ((c = getopt (argc, argv, "hi:n:s:e::")) != -1)
             switch (c)
             {
             case 'h':
@@ -111,6 +114,11 @@ int main (int argc, char **argv)
                     fprintf (stderr, "Invalid argument for option -n. See help.\n");
                     MPI_ABORT(MPI_COMM_WORLD, 1);
                 }
+                break;
+            case 'e':
+                computeEV = 1;
+                if (optarg)
+                    evFile = optarg;
                 break;
             case '?':
                 if (isprint (optopt))
@@ -136,6 +144,13 @@ int main (int argc, char **argv)
             printf("Input file: %s\n", inputfile);
         else
             printf("Use a matrix of scheme %d with dimension %d\n", usedScheme, n);
+
+        if (computeEV) {
+            if (evFile != NULL)
+                printf("Compute the eigenvectors defined in: %s\n", evFile);
+            else
+                printf("Program will compute all eigenvectors\n");
+        }
 
         if (outputfile != NULL) {
             writeOutput = 1;

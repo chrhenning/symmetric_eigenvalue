@@ -152,6 +152,34 @@ int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, do
     return 0;
 }
 
+int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedEV, EVToCompute* ret) {
+    ret->all = 0;
+    ret->n = 0;
+    ret->indices = NULL;
+    if (!compEV)
+        return 0;
+    else if(filename == NULL) {
+        // in this case, we have to compute all eigenvectors
+        ret->all = 1;
+        return 0;
+    }
+
+    // number of lines in file
+    int numLines = 0;
+
+    // read eigenvectors to read from file
+    FILE *f;
+    if ((f = fopen(filename, "w")) == NULL) {
+        fprintf(stderr, "Could not open file: %s\n", filename);
+        return -1;
+    }
+
+
+    if (f !=stdout) fclose(f);
+
+    return 0;
+}
+
 int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPIHandle comm) {
 
     MPI_Status status;
@@ -329,6 +357,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                                 rj[tcn->o+c] += rjTemp[po+r] * ev[ro+r];
                                             }
                                         }
+
+                                        free(ev);
                                     }
                                 }
 
@@ -337,10 +367,15 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     assert(taskid == MASTER);
                                     int k;
                                     xi[currJ] = 0;
+                                    // store i-th eigenvector of U
+                                    double* ev = malloc(n * sizeof(double));
+                                    // get i-th eigenvector of U
+                                    getEigenVector(root, ev, i);
                                     //#pragma omp parallel for default(shared) private(k) schedule(static)
                                     for (k = 0; k < pn; ++k) {
-                                        xi[currJ] += rj[po+k] * getEVElement(D,z,L,N,G,n,i,po+k);
+                                        xi[currJ] += rj[po+k] * ev[po+k];
                                     }
+                                    free(ev);
                                 }
 
                                 po = tcn->o;

@@ -28,6 +28,7 @@ DIM=16
 OUT=out.txt
 SCHEME=1
 
+# mpirun -n 1 -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s 1 -n 10 out.txt
 run: 
 	mpirun -n $(NUMTASKS) -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s $(SCHEME) -n $(DIM) $(OUT)
 
