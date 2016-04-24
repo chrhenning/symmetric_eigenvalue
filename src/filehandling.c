@@ -331,9 +331,13 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
             i = SL[iter].i; // Note, we consider eigenvalue i, but if we L would be stored sorted, then it would be eigenvallue iter
 
             // should we compute eigenvector iter?
-            while (iterEV < evToCompute.n && evToCompute.indices[iterEV] < iter) iterEV++;
-            if (iterEV < evToCompute.n && evToCompute.indices[iterEV] == iter)
+            if (evToCompute.all) {
                 computeCurrEV = 1;
+            } else if (evToCompute.n > 0) {
+                while (iterEV < evToCompute.n && evToCompute.indices[iterEV] < iter) iterEV++;
+                if (iterEV < evToCompute.n && evToCompute.indices[iterEV] == iter)
+                    computeCurrEV = 1;
+            }
         }
         MPI_Bcast(&i,1,MPI_INT,MASTER,comm.comm);
         MPI_Bcast(&computeCurrEV,1,MPI_INT,MASTER,comm.comm);

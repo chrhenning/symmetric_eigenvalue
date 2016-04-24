@@ -38,4 +38,9 @@ runo: run
 runc: cuppen run
 	
 runoc: cuppen runo
-	
+
+# same as run, but all eigenvalues will be computed
+rune: 
+	mpirun -n $(NUMTASKS) -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s $(SCHEME) -n $(DIM) -e $(OUT) 
+
+runec: cuppen rune 	

@@ -674,5 +674,11 @@ void showHelp() {
     printf("    If option i is used, then this option will be ignored.\n");
     printf(" -n NUM\n");
     printf("    Specify the dimension of the matrix chosen with option -s.\n");
+    printf(" -e(FILENAME)\n");
+    printf("    Without this option, no eigenvectors are computed, just the eigenvalues.\n");
+    printf("    If you just specify the flag -e, then all eigenvectors will be computed.\n");
+    printf("    If you specify additionally a filename, then he will read the indices\n");
+    printf("    of the eigenvectors to compute from this file (each line one index).\n");
+    printf("    Note, there is no blank between the option and the filename.\n");
     printf("\n");
 }
