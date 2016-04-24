@@ -368,7 +368,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                 int currJ = cn->o;
                 // extract 'j'-th component of xi
                 for (j = 0; j < nl; ++j) {
-                    MPI_Barrier(comm.comm);
+
                     cn = &(t->t[t->d-1].s[taskid]);
                     currJ = cn->o + j;
                     // compute line currJ
