@@ -239,12 +239,19 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     for (j = 0; j < n; j ++) 
       ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
   }
+  
+  /* recover the original rank-one update
+   * apply the inverse of Givens rotation from outside to inside
+   * for example, if the Givens rotation on the original problem is 
+   * G3 * G2 * G1 * (D + zz') G1' * G2' * G3' 
+   * The order here should be G3^-1, G2^-1 nad G1^-1 */
 
 #pragma omp parallel for default(shared) private(j) schedule(static)
   for (j = numGR - 1; j >= 0 ; j--) {
   double r, s, c;
   int a, b;
   double tmpi, tmpj;
+
     a = P[j];     
     b = G[a]; 
     r = sqrt(z[a] * z[a] + z[b] * z[b]);
@@ -254,6 +261,5 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     tmpj = -s * ev[a] + c * ev[b];
     ev[a] = tmpi;
     ev[b] = tmpj;
-
   }
 }
