@@ -54,8 +54,10 @@ int main (int argc, char **argv)
     // helper variable to easily access current node in tree
     EVRepNode* currNode = NULL;
 
-    // for time measurements
+    // for time measurement of eigenvalue computation
     double tic, toc;
+    // time measurement for roott finding
+    double rsum = 0, rtic, rtoc;
 
     // name of output file
     char* outputfile = NULL;
@@ -312,6 +314,7 @@ int main (int argc, char **argv)
     }
     MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    if (taskid == MASTER) printf("Average leaf size will be %d\n", leafSize);
     // the actual leafsize of the current task
     int nl = leafSize + (taskid < sizeRemainder ? 1 : 0); // FIXME: delete me (stored in tree)
     // helper variables
@@ -356,7 +359,7 @@ int main (int argc, char **argv)
             } else {
                 assert(n2 > 0);
 
-                printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
+                //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
 
                 // get current node in tree
                 currNode = accessNode(&evTree, s, taskid);
@@ -512,7 +515,7 @@ int main (int argc, char **argv)
                     MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
                     MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
 
-                    printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
+                    //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*
                      * Compute z, where z is
@@ -528,7 +531,10 @@ int main (int argc, char **argv)
                 // compute root finding in parrallel
                 // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
                 // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
+                rtic = omp_get_wtime();
                 computeEigenvalues(currNode, mpiHandle);
+                rtoc = omp_get_wtime();
+                rsum += rtoc - rtic;
 
                 if (currNode->taskid == taskid) {
                     // compute normalization factors
@@ -621,8 +627,10 @@ int main (int argc, char **argv)
 
     toc = omp_get_wtime();
     if (taskid == MASTER) {
+        double elapsedTime = toc-tic;
         printf("\n");
-        printf("Elapsed time in %f seconds\n", toc-tic);
+        printf("Required time to compute all eigenvalues: %f seconds\n", elapsedTime);
+        printf("Required time for root finding: %f seconds; fraction: %.1f%%\n", rsum, 100*rsum/elapsedTime);
     }
 
     if (writeOutput) {
