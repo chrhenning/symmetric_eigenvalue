@@ -10,7 +10,7 @@ inline double secularEquation(double lambda, double roh, double* z, double* D, i
   int i;
   //#pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
   for (i = 0; i < n; ++i) {
-    if (G[i] < 0)
+    if (G[i] == -1)
       sum += z[i]*z[i] / (D[i]-lambda);
   }
   return 1+roh*sum;
@@ -60,13 +60,19 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
   // copy and sort diagonal elements
   DiagElem* SD = malloc(n * sizeof(DiagElem));
   int i;
-#pragma omp parallel for default(shared) private(i) schedule(static)
+  double eps = 1e-14;
+
+  // scan z for zero element and mark it in G with -2
+  for (i = 0; i < n; i++) {
+   if (z[i] < eps) G[i] = -2;
+  }
+
+//#pragma omp parallel for default(shared) private(i) schedule(static)
   for (i = 0; i < n; ++i) {
     SD[i].e = D[i];
     SD[i].i = i;
   }
   qsort(SD, n, sizeof(DiagElem), compareDiagElem);
-  double eps = 1e-14;
 
   // calculate Givens rotation
   /* G is a vector that keeps track of Givens rotation for SD 
@@ -75,22 +81,31 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
   int a, b;
   double r;
+  int nextNonZero;
   for (i = 0; i < n - 1; i++){
-    if (fabs(SD[i + 1].e - SD[i].e) < eps) {
-      a = SD[i].i;
-      b = SD[i + 1].i; 
-      r = sqrt(z[a] * z[a] + z[b] * z[b]);
-      C[node->numGR] = z[b] / r;
+    if (G[SD[i].i] != -2) { // for those elements correspond to non-zero z
+        nextNonZero = i + 1;
+        while (G[SD[nextNonZero].i] == -2) {
+        nextNonZero++;
+        }
+        if (nextNonZero >= n) continue;
 
-      G[SD[i].i] = SD[i + 1].i;
-      z[SD[i + 1].i] = sqrt(z[SD[i + 1].i] * z[SD[i + 1].i] + z[SD[i].i] * z[SD[i].i]);
-      z[SD[i].i] = 0;
-      P[node->numGR] = SD[i].i;
+      if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
+        a = SD[i].i;
+        b = SD[nextNonZero].i; 
+        r = sqrt(z[a] * z[a] + z[b] * z[b]);
+        C[node->numGR] = z[b] / r;
 
-      node->numGR++;
+        G[SD[i].i] = SD[nextNonZero].i;
+        z[SD[nextNonZero].i] = sqrt(z[SD[nextNonZero].i] * z[SD[nextNonZero].i] + z[SD[i].i] * z[SD[i].i]);
+        z[SD[i].i] = 0;
+        P[node->numGR] = SD[i].i;
+
+        node->numGR++;
+      }
+      else 
+        G[SD[i].i] = -1;
     }
-    else 
-      G[SD[i].i] = -1;
   }
 
   /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
@@ -115,7 +130,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
      If sign(f(c)) = sign(f(a)) then a ← c else b ← c # new interval
      EndWhile
      */
-#pragma omp parallel for default(shared) private(i) schedule(static)
+//#pragma omp parallel for default(shared) private(i) schedule(static)
   for (i = 0; i < n; ++i) { // for each eigenvalue
     double lambda = 0;
     double a, b; // interval boundaries
@@ -125,7 +140,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     int prevNonZeroIdx;
     double di = SD[i].e;
 
-    if (G[ind] >= 0) {
+    if (G[ind] != -1) {
       L[ind] = di;
     } else {
       // set initial interval
@@ -139,7 +154,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
           }
         } else {
           prevNonZeroIdx = i - 1;
-          while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the first element is zero into consideration
+          while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the first element is zero into consideration
             prevNonZeroIdx = prevNonZeroIdx - 1;
           a = SD[prevNonZeroIdx].e;
         }
@@ -155,7 +170,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
           }
         } else {
           prevNonZeroIdx = i + 1;
-          while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the last element is zero into consideration
+          while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the last element is zero into consideration
             prevNonZeroIdx = prevNonZeroIdx + 1;
           b = SD[prevNonZeroIdx].e;
         }
@@ -209,18 +224,21 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
 
   int i, j;
   double tmp;
-#pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
+  //#pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
   for (i = 0; i < n; ++i) {
-    if (G[i] >= 0) {
+    if (G[i] != -1) {
       N[i] = 1;
     } else {
       N[i] = 0;
       for (j = 0; j < n; ++j) {
-        if (G[j] < 0) {
-          tmp = D[j]-L[i];
+        if (G[j] == -1) {
+          tmp = L[i] - D[j]; 
+          printf("i =  %d, j = %d  tmp is %lg\n", i, j, tmp);
+
           N[i] += z[j]*z[j] / (tmp*tmp);
         }
       }
+      printf("%d N[i] is %lg\n", i, N[i]);
       N[i] = sqrt(N[i]);
     }
   }
@@ -243,7 +261,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 
   // TODO compute i-th eigenvector and store in ev
   int j;
-  if(G[i] >= 0) {
+  if(G[i] != -1) {
     for (j = 0; j < n; j++) {
       if (j == i){
         ev[j] = 1;
@@ -253,11 +271,12 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     }
   } else {
     for (j = 0; j < n; j ++) 
-      if (G[j] >=0) {
+      if (G[j] != -1) {
         ev[j] = 0;
       } else {
         ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
       }
+
   }
 
 
@@ -267,7 +286,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
    * G3 * G2 * G1 * (D + zz') G1' * G2' * G3' 
    * The order here should be G3^-1, G2^-1 nad G1^-1 */
 
-#pragma omp parallel for default(shared) private(j) schedule(static)
+//#pragma omp parallel for default(shared) private(j) schedule(static)
   for (j = numGR - 1; j >= 0 ; j--) {
     int a, b;
     double s, c;
