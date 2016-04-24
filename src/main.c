@@ -473,7 +473,6 @@ int main (int argc, char **argv)
         // if task should not compute the spectral decomposition of two leaves
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
 
-
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
             MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
             MPI_Send(currNode->right->L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
@@ -488,11 +487,7 @@ int main (int argc, char **argv)
                 Q1f = NULL;
                 Q1l = NULL;
             }
-
-            // this task does not perform any merges anymore
-            goto EndOfAlgorithm;
         }
-
 
         // if task combines two splits in this stage
         // Note: if right == left, then the tree was not splitted in this stage (single path)
@@ -533,7 +528,9 @@ int main (int argc, char **argv)
                 // compute root finding in parrallel
                 // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
                 // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
+                MPI_Barrier(MPI_COMM_WORLD);
                 computeEigenvalues(currNode, mpiHandle);
+                MPI_Barrier(MPI_COMM_WORLD);
 
                 if (currNode->taskid == taskid) {
                     // compute normalization factors
