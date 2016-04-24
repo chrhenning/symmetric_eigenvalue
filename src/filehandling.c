@@ -248,6 +248,11 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     // size of original T (OE, OD)
     int n;
 
+    // time measurement for backtransformation
+    double esum = 0, etic, etoc;
+    // time measurement for eigenvector calculation
+    double evsum = 0, evtic, evtoc;
+
     // get root node
     EVRepNode* root = NULL;
     if (taskid == MASTER) {
@@ -347,6 +352,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
 
         // if we should extract the current eigenvector
         if (computeCurrEV) {
+            etic = omp_get_wtime();
 
             // extract current eigenvector
             if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
@@ -441,7 +447,10 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         #pragma omp for
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
+                                            evtic = omp_get_wtime();
                                             getEigenVector(tcn, ev, c);
+                                            evtoc = omp_get_wtime();
+                                            evsum += (evtoc - evtic);
 
                                             rj[tcn->o+c] = 0;
                                             for (r = 0; r < pn; ++r) {
@@ -461,7 +470,10 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     // store i-th eigenvector of U
                                     double* ev = malloc(n * sizeof(double));
                                     // get i-th eigenvector of U
+                                    evtic = omp_get_wtime();
                                     getEigenVector(root, ev, i);
+                                    evtoc = omp_get_wtime();
+                                    evsum += (evtoc - evtic);
                                     //#pragma omp parallel for default(shared) private(k) schedule(static)
                                     for (k = 0; k < pn; ++k) {
                                         xi[currJ] += rj[po+k] * ev[po+k];
@@ -512,6 +524,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                 // write results to file
                 fprintf(f, "%20.19g %20.19g\n", lambda, norm);
             }
+            etoc = omp_get_wtime();
+            esum += (etoc - etic);
         } else {
             if (taskid == MASTER) {
                 // we do not compute eigenvector i
@@ -534,6 +548,13 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     if (taskid == MASTER) {
         if (f !=stdout) fclose(f);
     }
+
+    if (taskid == MASTER) {
+        printf("\n");
+        printf("Required time for backtransformation: %f seconds\n", esum);
+        printf("Required time eigenvector extraction within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
+    }
+
     //MPI_Barrier(comm.comm);
     return 0;
 }
