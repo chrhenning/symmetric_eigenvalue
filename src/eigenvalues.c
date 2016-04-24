@@ -72,6 +72,8 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     for (i = 0; i < n - 1; i++){
       if (fabs(SD[i + 1].e - SD[i].e) < eps) {
         G[SD[i].i] = SD[i + 1].i;
+        z[SD[i + 1].i] = sqrt(z[SD[i + 1].i] * z[SD[i + 1].i] + z[SD[i].i] * z[SD[i].i]);
+        z[SD[i].i] = 0;
         P[node->numGR] = SD[i].i;
         node->numGR++;
       }
@@ -197,12 +199,12 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
   double tmp;
 #pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
   for (i = 0; i < n; ++i) {
-    if (G[i] > 0) {
+    if (G[i] >= 0) {
       N[i] = 1;
     } else {
       N[i] = 0;
       for (j = 0; j < n; ++j) {
-        if (G[j] > 0) {
+        if (G[j] < 0) {
           tmp = D[j]-L[i];
           N[i] += z[j]*z[j] / (tmp*tmp);
         }
@@ -228,7 +230,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 
   // TODO compute i-th eigenvector and store in ev
   int j;
-  if(G[i] > 0) {
+  if(G[i] >= 0) {
     for (j = 0; j < n; j++) {
       if (j == i){
         ev[j] = 1;
