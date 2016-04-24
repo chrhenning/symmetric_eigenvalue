@@ -44,6 +44,10 @@ struct EVRepNodeStruct {
      */
     int* G;
     /**
+     * @brief c Angles of Given's rotations (stored as cos(theta)^2
+     */
+    double* c;
+    /**
      * @brief P Order of Given's rotations
      */
     int* P;
