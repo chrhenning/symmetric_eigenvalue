@@ -8,7 +8,7 @@
 inline double secularEquation(double lambda, double roh, double* z, double* D, int n, int* G) {
     double sum = 0;
     int i;
-#pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
+// #pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
     for (i = 0; i < n; ++i)
 	if (G[i] < 0)
 	    sum += z[i]*z[i] / (D[i]-lambda);
@@ -240,7 +240,11 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     }
   } else {
     for (j = 0; j < n; j ++) 
-      ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+      if (G[j] >=0) {
+        ev[j] = 0;
+      } else {
+        ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+      }
   }
 
 
