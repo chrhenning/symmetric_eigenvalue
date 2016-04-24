@@ -152,7 +152,17 @@ int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, do
     return 0;
 }
 
-int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedEV, EVToCompute* ret) {
+/* qsort int comparison function */
+int int_cmp(const void *a, const void *b)
+{
+    const int *ia = (const int *)a; // casting pointer types
+    const int *ib = (const int *)b;
+    return *ia  - *ib;
+    /* integer comparison: returns negative if b > a
+    and positive if a > b */
+}
+
+int determineEigenvectorsToCompute(int compEV, char* filename, int n, EVToCompute* ret) {
     ret->all = 0;
     ret->n = 0;
     ret->indices = NULL;
@@ -169,18 +179,66 @@ int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedE
 
     // read eigenvectors to read from file
     FILE *f;
-    if ((f = fopen(filename, "w")) == NULL) {
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    /*
+     * Determine at first the number of lines in the file to allocate an appropriate vector
+     */
+    if ((f = fopen(filename, "r")) == NULL) {
         fprintf(stderr, "Could not open file: %s\n", filename);
         return -1;
     }
-
-
+    // for each line
+    while ((read = getline(&line, &len, f)) != -1) {
+        int curr = atoi(line);
+        if (curr == 0 || curr > n) {
+            // replace last character (\n) in line by \0
+            line[strlen(line)-1] = '\0';
+            printf("WARNING: Line %d (\"%s\") in file %s will be ignored. No valid eigenvector index for given problem.\n", numLines, line, filename);
+        } else {
+            numLines++;
+        }
+    }
     if (f !=stdout) fclose(f);
+    if (line) {
+        free(line);
+        line = NULL;
+    }
+
+
+    /*
+     * Store eigenvectors to compute in struct
+     */
+    if ((f = fopen(filename, "r")) == NULL) {
+        fprintf(stderr, "Could not open file: %s\n", filename);
+        return -1;
+    }
+    ret->n = numLines;
+    ret->indices = malloc(ret->n * sizeof(int));
+    // for each line
+    int j = 0;
+    while ((read = getline(&line, &len, f)) != -1) {
+        int curr = atoi(line);
+        if (curr > 0 && curr <= n) {
+            assert(j < numLines);
+            ret->indices[j] = curr-1;
+            j++;
+        }
+    }
+    assert(j == numLines);
+    if (f !=stdout) fclose(f);
+    if (line)
+        free(line);
+
+    // sort array
+    qsort(ret->indices, ret->n, sizeof(int), int_cmp); // there still might be values appearing more than once
 
     return 0;
 }
 
-int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPIHandle comm) {
+int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPIHandle comm, int computeEV, char* evFile) {
 
     MPI_Status status;
     // abbreviations
@@ -197,7 +255,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
         root = &(t->t[0].s[0]);
         n = root->n;
     }
-    MPI_Bcast(&n,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    MPI_Bcast(&n,1,MPI_INT,MASTER,comm.comm);
     assert(n > 0);
 
     FILE *f;
@@ -242,20 +300,49 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     double* rj = malloc(n * sizeof(double));
     double* rjTemp = malloc(n * sizeof(double)); // buffer for vec-mat multiplication
 
-    // FIXME
-    int ev[] = {0,1,n-1};
-    int evNum = 3;
-    int evIt = 0;
+    // decide which eigenvector we wanna compute and sort the eigenvalues, such that we can write them in the right order to a file
+    EVToCompute evToCompute;
+    DiagElem* SL = NULL; // eigenvalues sorted
+    if (taskid == MASTER) {
+        // sort eigenvalues (note, their order might not be determined by the permutation given in
+        // P, because deflation might have changed the order, that's the reason why we have to
+        // sort Lambda from scratch
+        SL = malloc(n * sizeof(DiagElem));
+        #pragma omp parallel for default(shared) private(i) schedule(static)
+        for (i = 0; i < n; ++i) {
+            SL[i].e = L[i];
+            SL[i].i = i;
+        }
+        qsort(SL, n, sizeof(DiagElem), compareDiagElem);
 
-    // for each eigenvalue
-    for (i = 0; i < n; ++i) {
+        if(determineEigenvectorsToCompute(computeEV, evFile, n, &evToCompute) == -1) {
+            fclose(f);
+            MPI_ABORT(comm.comm, 3);
+        }
+    }
+
+    // for each eigenvalue i (in sorted order
+    int iter;
+    int iterEV = 0;
+    for (iter = 0; iter < n; ++iter) {
+        // decide which is the index of the current eigenvalue to compute and if we should compute its eigenvector as well
+        int computeCurrEV = 0; // flag, if we should compute the current eigenvector
+        if (taskid == MASTER) { // decide, which is the next eigenvector, in the ascending order
+            i = SL[iter].i; // Note, we consider eigenvalue i, but if we L would be stored sorted, then it would be eigenvallue iter
+
+            // should we compute eigenvector iter?
+            while (iterEV < evToCompute.n && evToCompute.indices[iterEV] < iter) iterEV++;
+            if (iterEV < evToCompute.n && evToCompute.indices[iterEV] == iter)
+                computeCurrEV = 1;
+        }
+        MPI_Bcast(&i,1,MPI_INT,MASTER,comm.comm);
+        MPI_Bcast(&computeCurrEV,1,MPI_INT,MASTER,comm.comm);
 
         if (taskid == MASTER)
             lambda = L[i];
 
         // if we should extract the current eigenvector
-        if (evIt < evNum && i == ev[evIt]) {
-            evIt++;
+        if (computeCurrEV) {
 
             // extract current eigenvector
             if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
@@ -433,6 +520,9 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     if (taskid == MASTER) {
         free(x);
         free(xi);
+        // those to pointers might be still NULL
+        free(SL);
+        free(evToCompute.indices);
     }
     free(rj);
     free(rjTemp);

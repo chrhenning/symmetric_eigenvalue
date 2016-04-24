@@ -215,6 +215,7 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
 }
 
 void getEigenVector(EVRepNode *node, double* ev, int i) {
+<<<<<<< HEAD
   double* D = node->D;
   double* z = node->z;
   double* L = node->L;
@@ -234,32 +235,53 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
       } else {
         ev[j] = 0;
       }
+
+      double* D = node->D;
+      double* z = node->z;
+      double* L = node->L;
+      double* N = node->N;
+      int* G = node->G;
+      int* P = node->P;
+      double roh = node->beta * node->theta;
+      int n = node->n;
+      int numGR = node->numGR;
+
+      // TODO compute i-th eigenvector and store in ev
+      int j;
+      if(G[i] > 0) {
+        for (j = 0; j < n; j++) {
+          if (j == i){
+            ev[j] = 1;
+          } else {
+            ev[j] = 0;
+          }
+        }
+      } else {
+        for (j = 0; j < n; j ++) 
+          ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+      }
     }
-  } else {
-    for (j = 0; j < n; j ++) 
-      ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
-  }
-  
-  /* recover the original rank-one update
-   * apply the inverse of Givens rotation from outside to inside
-   * for example, if the Givens rotation on the original problem is 
-   * G3 * G2 * G1 * (D + zz') G1' * G2' * G3' 
-   * The order here should be G3^-1, G2^-1 nad G1^-1 */
+
+    /* recover the original rank-one update
+     * apply the inverse of Givens rotation from outside to inside
+     * for example, if the Givens rotation on the original problem is 
+     * G3 * G2 * G1 * (D + zz') G1' * G2' * G3' 
+     * The order here should be G3^-1, G2^-1 nad G1^-1 */
 
 #pragma omp parallel for default(shared) private(j) schedule(static)
-  for (j = numGR - 1; j >= 0 ; j--) {
-  double r, s, c;
-  int a, b;
-  double tmpi, tmpj;
+    for (j = numGR - 1; j >= 0 ; j--) {
+      double r, s, c;
+      int a, b;
+      double tmpi, tmpj;
 
-    a = P[j];     
-    b = G[a]; 
-    r = sqrt(z[a] * z[a] + z[b] * z[b]);
-    c = z[b] / r;
-    s = z[a] / r;
-    tmpi = c * ev[a] + s * ev[b];
-    tmpj = -s * ev[a] + c * ev[b];
-    ev[a] = tmpi;
-    ev[b] = tmpj;
+      a = P[j];     
+      b = G[a]; 
+      r = sqrt(z[a] * z[a] + z[b] * z[b]);
+      c = z[b] / r;
+      s = z[a] / r;
+      tmpi = c * ev[a] + s * ev[b];
+      tmpj = -s * ev[a] + c * ev[b];
+      ev[a] = tmpi;
+      ev[b] = tmpj;
+    }
   }
-}
