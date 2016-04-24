@@ -12,7 +12,7 @@ void initEVRepNode(EVRepNode* r) {
     r->z = NULL;
     r->N = NULL;
     r->G = NULL;
-    r->c = NULL;
+    r->C = NULL;
     r->P = NULL;
     r->beta = 0;
     r->theta = 0;
@@ -135,7 +135,7 @@ void freeEVRepTree(EVRepTree* t) {
                 free(n->z);
                 free(n->N);
                 free(n->G);
-                free(n->c);
+                free(n->C);
                 free(n->P);
             }
         }

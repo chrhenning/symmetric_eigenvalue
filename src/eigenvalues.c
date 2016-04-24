@@ -24,6 +24,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
   double* D = NULL;
   double* z = NULL;
   double* L = NULL;
+  double* C = NULL;
   int* G = NULL;
   int* P = NULL;
   double roh;
@@ -32,6 +33,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
   if (taskid == node->taskid) {
     node->G = malloc(n * sizeof(int));
     node->P = malloc(n * sizeof(int));
+    node->C = malloc(n * sizeof(double));
     /*
      * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
      */
@@ -42,6 +44,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     L = node->L;
     G = node->G;
     P = node->P;
+    C = node->C;
     roh = node->beta * node->theta;
     n = node->n;
     node->numGR = 0;
@@ -70,12 +73,20 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
    * Since SD has been sorted ascendingly, we should always make the  off-diagonal 
    * element that corresponds to the smaller diagonal element to be zero*/
 
+  int a, b;
+  double r;
   for (i = 0; i < n - 1; i++){
     if (fabs(SD[i + 1].e - SD[i].e) < eps) {
+      a = SD[i].i;
+      b = SD[i + 1].i; 
+      r = sqrt(z[a] * z[a] + z[b] * z[b]);
+      C[node->numGR] = z[b] / r;
+
       G[SD[i].i] = SD[i + 1].i;
       z[SD[i + 1].i] = sqrt(z[SD[i + 1].i] * z[SD[i + 1].i] + z[SD[i].i] * z[SD[i].i]);
       z[SD[i].i] = 0;
       P[node->numGR] = SD[i].i;
+
       node->numGR++;
     }
     else 
@@ -222,6 +233,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
   double* z = node->z;
   double* L = node->L;
   double* N = node->N;
+  double* C = node->C;
   int* G = node->G;
   int* P = node->P;
   double roh = node->beta * node->theta;
@@ -257,15 +269,15 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 
 #pragma omp parallel for default(shared) private(j) schedule(static)
   for (j = numGR - 1; j >= 0 ; j--) {
-    double r, s, c;
     int a, b;
+    double s, c;
     double tmpi, tmpj;
 
     a = P[j];     
     b = G[a]; 
-    r = sqrt(z[a] * z[a] + z[b] * z[b]);
-    c = z[b] / r;
-    s = z[a] / r;
+    c = C[j];
+    s = sqrt(1 - c * c);
+
     tmpi = c * ev[a] + s * ev[b];
     tmpj = -s * ev[a] + c * ev[b];
     ev[a] = tmpi;
