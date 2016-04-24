@@ -69,15 +69,14 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
      * Since SD has been sorted ascendingly, we should always make the  off-diagonal 
      * element that corresponds to the smaller diagonal element to be zero*/
 
-#pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n - 1; i++){
-	if (fabs(SD[i + 1].e - SD[i].e) < eps) {
-	    G[SD[i].i] = SD[i + 1].i;
-	    P[node->numGR] = SD[i].i;
-	    node->numGR++;
-	}
-	else 
-	    G[SD[i].i] = -1;
+      if (fabs(SD[i + 1].e - SD[i].e) < eps) {
+        G[SD[i].i] = SD[i + 1].i;
+        P[node->numGR] = SD[i].i;
+        node->numGR++;
+      }
+      else 
+        G[SD[i].i] = -1;
     }
 
     /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
@@ -104,83 +103,83 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
        */
 #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) { // for each eigenvalue
-	double lambda = 0;
-	double a, b; // interval boundaries
-	double fa, flambda, fb; // function values
+      double lambda = 0;
+      double a, b; // interval boundaries
+      double fa, flambda, fb; // function values
 
-	int ind = SD[i].i;
-	int prevNonZeroIdx;
-	double di = SD[i].e;
+      int ind = SD[i].i;
+      int prevNonZeroIdx;
+      double di = SD[i].e;
 
-	if (G[ind] >= 0) {
-	    L[ind] = di;
-	} else {
-	    // set initial interval
-	    if (roh < 0) {
-		if (i == 0) {
-		    a = di - normZ;
-		    int j = 0;
-		    while(secularEquation(a, roh, z, D, n, G) < 0) {
-			a -= normZ;
-			assert(++j < 100);
-		    }
-		} else {
-		    prevNonZeroIdx = i - 1;
-		    while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the first element is zero into consideration
-			prevNonZeroIdx = prevNonZeroIdx - 1;
-		    a = SD[prevNonZeroIdx].e;
-		}
-		b = di;
-	    } else {
-		a = di;
-		if (i == n-1) {
-		    b = di + normZ;
-		    int j = 0;
-		    while(secularEquation(b, roh, z, D, n, G) < 0) {
-			b += normZ;
-			assert(++j < 100);
-		    }
-		} else {
-		    prevNonZeroIdx = i + 1;
-		    while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the last element is zero into consideration
-			prevNonZeroIdx = prevNonZeroIdx + 1;
-		    b = SD[prevNonZeroIdx].e;
-		}
-	    }
+      if (G[ind] >= 0) {
+        L[ind] = di;
+      } else {
+        // set initial interval
+        if (roh < 0) {
+          if (i == 0) {
+            a = di - normZ;
+            int j = 0;
+            while(secularEquation(a, roh, z, D, n, G) < 0) {
+              a -= normZ;
+              assert(++j < 100);
+            }
+          } else {
+            prevNonZeroIdx = i - 1;
+            while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the first element is zero into consideration
+              prevNonZeroIdx = prevNonZeroIdx - 1;
+            a = SD[prevNonZeroIdx].e;
+          }
+          b = di;
+        } else {
+          a = di;
+          if (i == n-1) {
+            b = di + normZ;
+            int j = 0;
+            while(secularEquation(b, roh, z, D, n, G) < 0) {
+              b += normZ;
+              assert(++j < 100);
+            }
+          } else {
+            prevNonZeroIdx = i + 1;
+            while(G[SD[prevNonZeroIdx].i] > 0) // TODO: Take the last element is zero into consideration
+              prevNonZeroIdx = prevNonZeroIdx + 1;
+            b = SD[prevNonZeroIdx].e;
+          }
+        }
 
-	    int j = 0;
-	    while (++j < maxIter) {
+        int j = 0;
+        while (++j < maxIter) {
 
-		// new lambda
-		lambda = (a+b) / 2;
-		// compute current function values
-		fa = secularEquation(a, roh, z, D, n, G);
-		flambda = secularEquation(lambda, roh, z, D, n, G);
-		//fb = secularEquation(b, roh, z, D, n, G);
+          // new lambda
+          lambda = (a+b) / 2;
+          // compute current function values
+          fa = secularEquation(a, roh, z, D, n, G);
+          flambda = secularEquation(lambda, roh, z, D, n, G);
+          //fb = secularEquation(b, roh, z, D, n, G);
 
-		// if a function value is inf, then it has probably not the right sign
-		// initial function values are in +/- infinity, depending on the gradiend of the secular equation
-		if (fa == INFINITY || fa == -INFINITY)
-		    fa = (roh > 0 ? -INFINITY : INFINITY);
+          // if a function value is inf, then it has probably not the right sign
+          // initial function values are in +/- infinity, depending on the gradiend of the secular equation
+          if (fa == INFINITY || fa == -INFINITY)
+            fa = (roh > 0 ? -INFINITY : INFINITY);
 
-		//if (fb == INFINITY || fb == -INFINITY)
-		//   fb = (roh > 0 ? INFINITY : -INFINITY);
+          //if (fb == INFINITY || fb == -INFINITY)
+          //   fb = (roh > 0 ? INFINITY : -INFINITY);
 
-		//if (j==10)
-		//    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
+          //if (j==10)
+          //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
-		if (flambda == 0 || (b-a)/2 < eps)
-		    break;
+          if (flambda == 0 || (b-a)/2 < eps)
+            break;
 
-		// if sign(a) == sign(lambda)
-		if ((fa >= 0 && flambda >= 0) || (fa < 0 && flambda < 0))
-		    a = lambda;
-		else
-		    b = lambda;
-	    }
-	    L[ind] = lambda;
-	    //printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n, G));
-	}
+          // if sign(a) == sign(lambda)
+          if ((fa >= 0 && flambda >= 0) || (fa < 0 && flambda < 0))
+            a = lambda;
+          else
+            b = lambda;
+        }
+        L[ind] = lambda;
+        //printf("f(%g) = %g\n", lambda, secularEquation(lambda, roh, z, D, n, G));
+      }
     }
 
 
@@ -192,69 +191,69 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 }
 
 double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int n) {
-    double *N = malloc(n * sizeof(double));
+  double *N = malloc(n * sizeof(double));
 
-    int i, j;
-    double tmp;
+  int i, j;
+  double tmp;
 #pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
-    for (i = 0; i < n; ++i) {
-	if (G[i] > 0) {
-	    N[i] = 1;
-	} else {
-	    N[i] = 0;
-	    for (j = 0; j < n; ++j) {
-		if (G[j] > 0) {
-		    tmp = D[j]-L[i];
-		    N[i] += z[j]*z[j] / (tmp*tmp);
-		}
-	    }
-	    N[i] = sqrt(N[i]);
-	}
+  for (i = 0; i < n; ++i) {
+    if (G[i] > 0) {
+      N[i] = 1;
+    } else {
+      N[i] = 0;
+      for (j = 0; j < n; ++j) {
+        if (G[j] > 0) {
+          tmp = D[j]-L[i];
+          N[i] += z[j]*z[j] / (tmp*tmp);
+        }
+      }
+      N[i] = sqrt(N[i]);
     }
+  }
 
-    return N;
+  return N;
 }
 
 void getEigenVector(EVRepNode *node, double* ev, int i) {
-    double* D = node->D;
-    double* z = node->z;
-    double* L = node->L;
-    double* N = node->N;
-    int* G = node->G;
-    int* P = node->P;
-    double roh = node->beta * node->theta;
-    int n = node->n;
-    int numGR = node->numGR;
-    double r, s, c;
-    int a, b;
-    double tmpi, tmpj;
+  double* D = node->D;
+  double* z = node->z;
+  double* L = node->L;
+  double* N = node->N;
+  int* G = node->G;
+  int* P = node->P;
+  double roh = node->beta * node->theta;
+  int n = node->n;
+  int numGR = node->numGR;
 
-    // TODO compute i-th eigenvector and store in ev
-    int j;
-    if(G[i] > 0) {
-	for (j = 0; j < n; j++) {
-	    if (j == i){
-		ev[j] = 1;
-	    } else {
-		ev[j] = 0;
-	    }
-	}
-    } else {
-	for (j = 0; j < n; j ++) 
-	    ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+  // TODO compute i-th eigenvector and store in ev
+  int j;
+  if(G[i] > 0) {
+    for (j = 0; j < n; j++) {
+      if (j == i){
+        ev[j] = 1;
+      } else {
+        ev[j] = 0;
+      }
     }
+  } else {
+    for (j = 0; j < n; j ++) 
+      ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+  }
 
 #pragma omp parallel for default(shared) private(j) schedule(static)
-    for (j = numGR - 1; j >= 0 ; j--) {
-	a = P[j];     
-	b = G[a]; 
-	r = sqrt(z[a] * z[a] + z[b] * z[b]);
-	c = z[b] / r;
-	s = z[a] / r;
-	tmpi = c * ev[a] + s * ev[b];
-	tmpj = -s * ev[a] + c * ev[b];
-	ev[a] = tmpi;
-	ev[b] = tmpj;
+  for (j = numGR - 1; j >= 0 ; j--) {
+  double r, s, c;
+  int a, b;
+  double tmpi, tmpj;
+    a = P[j];     
+    b = G[a]; 
+    r = sqrt(z[a] * z[a] + z[b] * z[b]);
+    c = z[b] / r;
+    s = z[a] / r;
+    tmpi = c * ev[a] + s * ev[b];
+    tmpj = -s * ev[a] + c * ev[b];
+    ev[a] = tmpi;
+    ev[b] = tmpj;
 
-    }
+  }
 }
