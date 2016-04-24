@@ -528,9 +528,7 @@ int main (int argc, char **argv)
                 // compute root finding in parrallel
                 // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
                 // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
-                MPI_Barrier(MPI_COMM_WORLD);
                 computeEigenvalues(currNode, mpiHandle);
-                MPI_Barrier(MPI_COMM_WORLD);
 
                 if (currNode->taskid == taskid) {
                     // compute normalization factors

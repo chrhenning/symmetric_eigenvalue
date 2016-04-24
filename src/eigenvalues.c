@@ -8,10 +8,11 @@
 inline double secularEquation(double lambda, double roh, double* z, double* D, int n, int* G) {
     double sum = 0;
     int i;
-#pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
-    for (i = 0; i < n; ++i)
-	if (G[i] < 0)
-	    sum += z[i]*z[i] / (D[i]-lambda);
+    //#pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
+    for (i = 0; i < n; ++i) {
+        if (G[i] < 0)
+            sum += z[i]*z[i] / (D[i]-lambda);
+    }
     return 1+roh*sum;
 }
 
@@ -48,7 +49,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
     // we don't use parallelism yet, so just return if other task
     if (taskid != node->taskid) {
-	return;
+        return;
     }
 
     assert(roh != 0);

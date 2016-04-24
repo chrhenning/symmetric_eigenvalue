@@ -44,7 +44,7 @@ struct EVRepNodeStruct {
      */
     int* G;
     /**
-     * @brief P Permutation
+     * @brief P Order of Given's rotations
      */
     int* P;
     /**
