@@ -215,7 +215,6 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
 }
 
 void getEigenVector(EVRepNode *node, double* ev, int i) {
-<<<<<<< HEAD
   double* D = node->D;
   double* z = node->z;
   double* L = node->L;
@@ -285,3 +284,4 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
       ev[b] = tmpj;
     }
   }
+}
