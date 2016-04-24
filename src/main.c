@@ -637,7 +637,7 @@ int main (int argc, char **argv)
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
-        writeResults(outputfile,OD,OE,&evTree, mpiHandle);
+        writeResults(outputfile,OD,OE,&evTree, mpiHandle, computeEV, evFile);
     }
 
     freeEVRepTree(&evTree);

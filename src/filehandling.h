@@ -47,7 +47,15 @@ int readTriadiagonalMatrixFromSparseMTX(const char* filename, double **T, int *n
  */
 int readSymmTriadiagonalMatrixFromSparseMTX(const char* filename, double **D, double **E, int *n);
 
-int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedEV, EVToCompute *ret);
+/**
+ * @brief determineEigenvectorsToCompute Determine, which eigenvectors we have to compute at the end from the file given by the user
+ * @param compEV Flag, if we should compute any eigenvectors
+ * @param filename Name of filename which contains the indices of the eigenvectors we should compute (NULL otherwise)
+ * @param n Size of matrix T
+ * @param ret A sorted array with the eigenvectors to compute
+ * @return -1, if an IO error occured, else 0
+ */
+int determineEigenvectorsToCompute(int compEV, char* filename, int n, EVToCompute *ret);
 
 /**
  * @brief writeResults Write the results to an outputfile where each line has the form "lambda_i ||T*xi - lambda_i*xi||, if xi should be computed, otherwise only the eigenvalue
@@ -56,6 +64,8 @@ int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedE
  * @param OE Array with off-diagonal elements of original matrix T (size n-1)
  * @param t The tree, that stores all the eigenvector matrix represenatitions for the curren task
  * @param comm The MPI handle with the information neccessary to allow inter-task communication
+ * @param compEV Flag, if we should compute any eigenvectors
+ * @param evFile Name of filename which contains the indices of the eigenvectors we should compute (NULL otherwise)
  *
  * To access eigenvectors, we need to compute columns of the matrix
  * W = Q * U_(d-2) * ... * U_1 * U_0, where Q is the block diagonal matrix
@@ -68,6 +78,6 @@ int determineEigenvectorsToCompute(int compEV, char* filename, DiagElem* sortedE
  * with the j-th column from U_0.
  * This algorithm will compute the rows of U in parallel.
  */
-int writeResults(const char* filename, double* OD, double* OE, EVRepTree *t, MPIHandle comm);
+int writeResults(const char* filename, double* OD, double* OE, EVRepTree *t, MPIHandle comm, int computeEV, char* evFile);
 
 #endif // FILEHANDLING_H

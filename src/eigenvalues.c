@@ -226,7 +226,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     int n = node->n;
     int numGR = node->numGR;
     double r, s, c;
-    int a, b
+    int a, b;
 	double tmpi, tmpj;
 
     // TODO compute i-th eigenvector and store in ev
