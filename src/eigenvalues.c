@@ -35,6 +35,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         node->G = malloc(n * sizeof(int));
         node->P = malloc(n * sizeof(int));
         node->C = malloc(n * sizeof(double));
+        node->S = malloc(n * sizeof(double));
         /*
      * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
      */
@@ -67,7 +68,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     // scan z for zero element and mark it in G with -2
     for (i = 0; i < n; i++) {
         if (fabs(z[i]) < eps) {
-            printf("Deflation happens (z) for index %d\n", i);
+            //printf("Deflation happens (z) for index %d\n", i);
             G[i] = -2;
         }
     }
@@ -99,7 +100,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
             }
 
             if (fabs(SD[nextNonZero].e - SD[i].e) < 1e-5) {
-              printf("Deflation happens (d) for element %g\n", SD[i].i);
+              //printf("Deflation happens (d) for element %g\n", SD[i].i);
 
               a = SD[i].i;
               b = SD[nextNonZero].i;

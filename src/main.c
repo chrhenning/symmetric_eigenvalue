@@ -56,8 +56,10 @@ int main (int argc, char **argv)
 
     // for time measurement of eigenvalue computation
     double tic, toc;
-    // time measurement for roott finding
+    // time measurement for root finding
     double rsum = 0, rtic, rtoc;
+    // time measurement for eigenvector computation
+    double evsum = 0, evtic, evtoc;
 
     // name of output file
     char* outputfile = NULL;
@@ -575,7 +577,10 @@ int main (int argc, char **argv)
                         #pragma omp for
                         for (i = 0; i < nq1+nq2; ++i) {
                             // get i-th eigenvector of U
+                            evtic = omp_get_wtime();
                             getEigenVector(currNode, ev, i);
+                            evtoc = omp_get_wtime();
+                            evsum += evtoc - evtic;
 
                             Wf[i] = 0;
                             for (j = 0; j < nq1; ++j)
@@ -625,6 +630,7 @@ int main (int argc, char **argv)
         printf("\n");
         printf("Required time to compute all eigenvalues: %f seconds\n", elapsedTime);
         printf("Required time for root finding: %f seconds; fraction: %.1f%%\n", rsum, 100*rsum/elapsedTime);
+        printf("Required time for eigenvector extraction: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
     }
 
     if (writeOutput) {
