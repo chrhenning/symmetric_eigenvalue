@@ -445,6 +445,7 @@ int main (int argc, char **argv)
     if (numSplitStages == 0)
         goto EndOfAlgorithm;
 
+     MPI_Barrier(MPI_COMM_WORLD);
     /**********************
      * Conquer phase
      **********************/
@@ -574,7 +575,7 @@ int main (int argc, char **argv)
                         // store i-th eigenvector of U
                         double* ev = malloc(currNode->n * sizeof(double));
 
-                        #pragma omp for
+                        #pragma omp for private(evtic, evtoc) reduction(+:evsum)
                         for (i = 0; i < nq1+nq2; ++i) {
                             // get i-th eigenvector of U
                             evtic = omp_get_wtime();

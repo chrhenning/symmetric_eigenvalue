@@ -454,7 +454,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         // store c-th eigenvector of U
                                         double* ev = malloc(tcn->n * sizeof(double));
 
-                                        #pragma omp for
+                                        #pragma omp for private(evtic, evtoc) reduction(+:evsum)
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
                                             evtic = omp_get_wtime();

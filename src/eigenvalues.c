@@ -100,11 +100,11 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
             }
 
             if (fabs(SD[nextNonZero].e - SD[i].e) < 1e-5) {
-              //printf("Deflation happens (d) for element %g\n", SD[i].i);
 
               a = SD[i].i;
               b = SD[nextNonZero].i;
               r = sqrt(z[a] * z[a] + z[b] * z[b]);
+              //printf("Deflation happens (d) for element %g (r=%g)\n", SD[i].i, r);
               c = z[b] / r;
               s = z[a] / r;
               C[node->numGR] = c;
@@ -220,7 +220,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
           //if (fb == INFINITY || fb == -INFINITY)
           //   fb = (roh > 0 ? INFINITY : -INFINITY);
 
-          //if (j==10)
+          //if (j==1)
           //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
           if (flambda == 0 || (b-a)/2 < 1e-14)
@@ -332,7 +332,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     a = P[j];
     b = G[a];
     c = C[j];
-    s = S[j]; // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
+    //s = S[j]; // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
 
     tmpi = c * ev[a] + s * ev[b];
     tmpj = -s * ev[a] + c * ev[b];
