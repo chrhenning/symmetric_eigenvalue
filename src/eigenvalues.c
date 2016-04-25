@@ -261,7 +261,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 
   // TODO compute i-th eigenvector and store in ev
   int j;
-  if(G[i] != -1) {
+  if(G[i] < 0) {
     for (j = 0; j < n; j++) {
       if (j == i){
         ev[j] = 1;
@@ -271,7 +271,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     }
   } else {
     for (j = 0; j < n; j ++) 
-      if (G[j] != -1) {
+      if (G[j] < -1) {
         ev[j] = 0;
       } else {
         ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
@@ -295,7 +295,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     a = P[j];     
     b = G[a]; 
     c = C[j];
-    s = sqrt(1 - c * c);
+    s = sqrt(1 - c * c); // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
 
     tmpi = c * ev[a] + s * ev[b];
     tmpj = -s * ev[a] + c * ev[b];
