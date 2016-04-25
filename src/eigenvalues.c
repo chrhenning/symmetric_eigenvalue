@@ -65,6 +65,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     // scan z for zero element and mark it in G with -2
     for (i = 0; i < n; i++) {
         if (fabs(z[i]) < eps) {
+            //printf("Deflation happens (z) for index %d\n", i);
             G[i] = -2;
         }
     }
@@ -84,15 +85,19 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     int a, b;
     double r;
     int nextNonZero;
-    for (i = 0; i < n - 1; i++){
+    for (i = 0; i < n; i++){
         if (G[SD[i].i] != -2) { // for those elements correspond to non-zero z
             nextNonZero = i + 1;
             while (G[SD[nextNonZero].i] == -2) {
                 if (++nextNonZero == n) break;
             }
-            if (nextNonZero >= n) continue;
+            if (nextNonZero >= n) {
+                G[SD[i].i] = -1;
+                continue;
+            }
 
             if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
+                //printf("Deflation happens (d) for element %g\n", SD[i].i);
                 a = SD[i].i;
                 b = SD[nextNonZero].i;
                 r = sqrt(z[a] * z[a] + z[b] * z[b]);
@@ -157,7 +162,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                 } else {
                     prevNonZeroIdx = i - 1;
                     while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the first element is zero into consideration
-                        prevNonZeroIdx = prevNonZeroIdx - 1;
+                        prevNonZeroIdx--;
                     a = SD[prevNonZeroIdx].e;
                 }
                 b = di;
@@ -173,7 +178,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                 } else {
                     prevNonZeroIdx = i + 1;
                     while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the last element is zero into consideration
-                        prevNonZeroIdx = prevNonZeroIdx + 1;
+                        prevNonZeroIdx++;
                     b = SD[prevNonZeroIdx].e;
                 }
             }
@@ -196,7 +201,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                 //if (fb == INFINITY || fb == -INFINITY)
                 //   fb = (roh > 0 ? INFINITY : -INFINITY);
 
-                //if (j==10)
+                //if (j==1)
                 //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
                 if (flambda == 0 || (b-a)/2 < eps)
@@ -218,7 +223,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
     //    printVector(z,n);
     //    printVector(D,n);
-    //    printVector(L,n);
+    //printVector(L,n);
 }
 
 void computeNormalizationFactors(EVRepNode *node) {

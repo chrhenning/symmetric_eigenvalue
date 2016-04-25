@@ -205,6 +205,9 @@ int main (int argc, char **argv)
 
     StartOfAlgorithm:
 
+    //if (taskid == MASTER)
+    //    printTridiagonalMatrix(D,E,n);
+
     // in case the MASTER tells us we should end here
     MPI_Bcast(&endProgram,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     if (endProgram == 1) {
@@ -341,7 +344,7 @@ int main (int argc, char **argv)
                 assert(n2 > 0);
                 assert(currNode->left->taskid != currNode->right->taskid);
 
-                printf("Task %d: Splits into (Task %d: %d; Task %d: %d) in stage %d\n", taskid, taskid, n1, rightChild[s], n2, s);
+                //printf("Task %d: Splits into (Task %d: %d; Task %d: %d) in stage %d\n", taskid, taskid, n1, rightChild[s], n2, s);
 
                 assert(s == 0 || parent[s-1] == currNode->parent->taskid);
                 assert(rightChild[s] == currNode->right->taskid);
@@ -461,7 +464,7 @@ int main (int argc, char **argv)
 
         // if task should not compute the spectral decomposition of two leaves
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
-            printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
+            //printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
             MPI_Ssend(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
             MPI_Ssend(L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
@@ -501,8 +504,8 @@ int main (int argc, char **argv)
                     Q2l = malloc(nq2 * sizeof(double));
                     MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
                     MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
-
-                    printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
+                    //printVector(currNode->D, currNode->n);
+                    //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*
                      * Compute z, where z is
