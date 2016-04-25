@@ -61,12 +61,10 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     DiagElem* SD = malloc(n * sizeof(DiagElem));
     int i;
     double eps = 1e-14;
-    printVector(z,n);
 
     // scan z for zero element and mark it in G with -2
     for (i = 0; i < n; i++) {
         if (fabs(z[i]) < eps) {
-            printf("Deflation happens (z)\n");
             G[i] = -2;
         }
     }
@@ -95,7 +93,6 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
             if (nextNonZero >= n) continue;
 
             if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
-                printf("Deflation happens\n");
                 a = SD[i].i;
                 b = SD[nextNonZero].i;
                 r = sqrt(z[a] * z[a] + z[b] * z[b]);
@@ -227,6 +224,9 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int n) {
     double *N = malloc(n * sizeof(double));
 
+    // TODO: what we probably should do here, is setting all normalization vectors to one, and
+    // we call getEigenVector to get each single eigenvector and compute the norm of it
+
     int i, j;
     double tmp;
     //#pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
@@ -266,7 +266,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
 
     // TODO compute i-th eigenvector and store in ev
     int j;
-    if(G[i] < 0) {
+    if(G[i] != -1) {
         for (j = 0; j < n; j++) {
             if (j == i){
                 ev[j] = 1;
