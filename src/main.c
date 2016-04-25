@@ -330,39 +330,21 @@ int main (int argc, char **argv)
 
         // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
         if (taskid % modulus == 0) {
+            // get current node in tree
+            currNode = accessNode(&evTree, s, taskid);
+
             rightChild[s] = taskid + modulus/2;
             parent[s] = taskid; // left child will stay on this node
 
-            // Compute size of left and right subtree depending on the number of childrens in this tree.
-            // The left subtree will always be a fully balanced tree (so it will have modulus/2 leaves).
-            // The right subtree has min(numtasks-(taskid+modulus/2) , modulus/2) leaves.
-            numLeavesRight = min(numtasks-rightChild[s], modulus/2);
+            n1 = currNode->left->n;
+            n2 = currNode->right->n;
 
-            n1 = modulus/2 * leafSize;
-            n2 = numLeavesRight * leafSize;
-
-            // split the remaining lines equally on the leaves
-            n1 += max(0, min(sizeRemainder-taskid, modulus/2));
-            n2 += max(0, min(sizeRemainder-rightChild[s], numLeavesRight));
-
-            // if right child does not exist (we could catch this earlier, but I just wanna make sure here that everything works as I expect)
-            if (rightChild[s] >= numtasks) {
-                assert(n2 == 0 || s < numSplitStages-1);
-                if (n2 > 0) { // we don't split the tree here, so we are going down the tree along a single path to the next stage
-                    rightChild[s] = taskid;
-                    parent[s] = taskid;
-                } else {
-                    rightChild[s] = -1;
-                    parent[s] = -1;
-                }
-
-            } else {
+            if (currNode->left != currNode->right) { // an actual split is performed
                 assert(n2 > 0);
+                assert(currNode->left->taskid != currNode->right->taskid);
 
-                //printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
+                printf("Task %d: Splits into (Task %d: %d; Task %d: %d) in stage %d\n", taskid, taskid, n1, rightChild[s], n2, s);
 
-                // get current node in tree
-                currNode = accessNode(&evTree, s, taskid);
                 assert(s == 0 || parent[s-1] == currNode->parent->taskid);
                 assert(rightChild[s] == currNode->right->taskid);
 
@@ -380,6 +362,8 @@ int main (int argc, char **argv)
                 MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
                 MPI_Send(D+n1, n2, MPI_DOUBLE, rightChild[s], 2, MPI_COMM_WORLD);
                 MPI_Send(E+n1, n2-1, MPI_DOUBLE, rightChild[s], 3, MPI_COMM_WORLD);
+            } else {
+                rightChild[s] = -1;
             }
         }
 
@@ -406,6 +390,7 @@ int main (int argc, char **argv)
      * The size of the current leave is in nl.
      * The actual allocated memory is still stored in n (which will be needed in conquer phase)
      */
+    MPI_Barrier(MPI_COMM_WORLD);
 
     /**********************
      * Compute eigenpairs of leaves using QR algorithm
@@ -442,6 +427,7 @@ int main (int argc, char **argv)
 
     // reset D to L
     currNode->L = currNode->D;
+    double* L = currNode->L; // the reason why I store extra, is because this is easier then find later on the right child, which sends it to the parent node
     currNode->D = NULL;
 
     // off-diagonal elements are not needed anymore
@@ -475,10 +461,10 @@ int main (int argc, char **argv)
 
         // if task should not compute the spectral decomposition of two leaves
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
-
+            printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
             MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
-            MPI_Send(currNode->right->L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
+            MPI_Send(L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
             MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
             MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
 
@@ -515,7 +501,7 @@ int main (int argc, char **argv)
                     MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
                     MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
 
-                    //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
+                    printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*
                      * Compute z, where z is
@@ -537,6 +523,7 @@ int main (int argc, char **argv)
                 rsum += rtoc - rtic;
 
                 if (currNode->taskid == taskid) {
+                    L = currNode->L;
                     // compute normalization factors
                     currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
 

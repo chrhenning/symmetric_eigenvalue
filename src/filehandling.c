@@ -374,7 +374,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                 int currJ = cn->o;
                 // extract 'j'-th component of xi
                 for (j = 0; j < nl; ++j) {
-
+                    //printf("Task %d working on row %d\n", taskid, currJ);
                     cn = &(t->t[t->d-1].s[taskid]);
                     currJ = cn->o + j;
                     // compute line currJ
@@ -397,6 +397,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                         if (s < t->d-1) { // we have to receive the rows from our right child
                             if (cn->right != cn->left)
                                 rowsToForward = cn->right->numLeaves;
+                            else
+                                rowsToForward = 0;
                         }
                         // I have to forward a row for each of my leaves
                         int l;
@@ -419,19 +421,27 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                             EVRepNode* tcn = cn;
                             // climb up the tree
                             int ts;
-                            for (ts = s; ts >= 0; --ts) {
+                            for (ts = s; ts >= 0; --ts) {                                
+                                // if I climb up along a single path without splits
+                                if (ts < t->d-1 && tcn->left == tcn->right) {
+                                    //printf("task %d forward in stage %d\n", taskid, ts);
+                                    tcn = tcn->parent;
+                                    continue;
+                                }
 
-                                // send current row to parent
+                                // send current row to parent                                
                                 if (tcn->taskid != taskid) {
-                                    MPI_Send(&pn, 1, MPI_INT, tcn->taskid, currJ, comm.comm);
-                                    MPI_Send(&po, 1, MPI_INT, tcn->taskid, n+currJ, comm.comm);
-                                    MPI_Send(rj+po, pn, MPI_DOUBLE, tcn->taskid, 2*n+currJ, comm.comm);
+                                    //printf("Task %d forward row %d to %d\n", taskid, currJ, tcn->taskid);
+                                    MPI_Ssend(&pn, 1, MPI_INT, tcn->taskid, currJ, comm.comm);
+                                    MPI_Ssend(&po, 1, MPI_INT, tcn->taskid, n+currJ, comm.comm);
+                                    MPI_Ssend(rj+po, pn, MPI_DOUBLE, tcn->taskid, 2*n+currJ, comm.comm);
                                     break;
                                 }
 
                                 // if U_s is stored in this task
                                 // multiply row rj with U_ts
                                 if (ts < t->d-1 && ts > 0) { // if ts == d-1: nothing to do, since we already copied row from Q
+
                                     assert(tcn->L != NULL);
                                     assert(tcn->o <= po);
                                     int ro = po - tcn->o;
@@ -448,7 +458,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
                                             evtic = omp_get_wtime();
-                                            getEigenVector(tcn, ev, c);
+                                            getEigenVector(tcn, ev, c);                                            
                                             evtoc = omp_get_wtime();
                                             evsum += (evtoc - evtic);
 
@@ -459,7 +469,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         }
 
                                         free(ev);
-                                    }
+                                    }                                    
                                 }
 
                                 // compute element currJ of eigenvector i by multiplying currJ-th row of U with i-th column of U_0

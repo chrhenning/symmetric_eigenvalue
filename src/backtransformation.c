@@ -65,7 +65,7 @@ EVRepTree initEVRepTree(int depth, int numtasks, int n) {
             if (s > 0) {
                 curr->parent = &(t.t[s-1].s[j/2]);
                 if (j % 2 == 0) {
-                    curr->parent->left = curr;
+                    curr->parent->left = curr;                    
                     if (j == n-1) // no split, single path
                         curr->parent->right = curr;
                 } else {
