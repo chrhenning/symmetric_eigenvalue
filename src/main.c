@@ -526,7 +526,7 @@ int main (int argc, char **argv)
                 if (currNode->taskid == taskid) {
                     L = currNode->L;
                     // compute normalization factors
-                    currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
+                    computeNormalizationFactors(currNode);
 
                     /*
                      * It holds that T = W L W^T, where W = QU
