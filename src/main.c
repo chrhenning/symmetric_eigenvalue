@@ -320,8 +320,6 @@ int main (int argc, char **argv)
     // helper variables
     // size of T in left resp. right subtree
     int n1,n2;
-    // number of leaves in the right subtree
-    int numLeavesRight;
 
     // stage in divide tree
     int s = 0;
@@ -452,6 +450,8 @@ int main (int argc, char **argv)
     int nq1 = nl, nq2;
     double *Q2f = NULL, *Q2l = NULL;
 
+    int performedMerge = 0; // If I haven't performed a merge yet, then I am not allowed to free Q1l,Q1f, because they still point to the leaf node
+
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
     assert(numSplitStages > 0);
     for (s = numSplitStages-1; s >= 0; s--) {
@@ -463,13 +463,13 @@ int main (int argc, char **argv)
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
             printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
-            MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
-            MPI_Send(L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
-            MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
-            MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
+            MPI_Ssend(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
+            MPI_Ssend(L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
+            MPI_Ssend(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
+            MPI_Ssend(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
 
             // this task can't be the master, so there is no work left to do for it
-            if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+            if (performedMerge) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
                 myfree(&Q1f);
                 myfree(&Q1l);
             } else {
@@ -484,6 +484,7 @@ int main (int argc, char **argv)
             // for all tasks, that are leaves of the current node, they can work in parallel on the root finding problem
             if (taskid >= currNode->taskid && taskid < (currNode->taskid+currNode->numLeaves)) {
                 if (currNode->taskid == taskid) {
+                    performedMerge = 1;
                     // get current node in tree
                     EVRepNode* leftChild = currNode->left;
                     assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);

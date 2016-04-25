@@ -432,9 +432,9 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                 // send current row to parent                                
                                 if (tcn->taskid != taskid) {
                                     //printf("Task %d forward row %d to %d\n", taskid, currJ, tcn->taskid);
-                                    MPI_Ssend(&pn, 1, MPI_INT, tcn->taskid, currJ, comm.comm);
-                                    MPI_Ssend(&po, 1, MPI_INT, tcn->taskid, n+currJ, comm.comm);
-                                    MPI_Ssend(rj+po, pn, MPI_DOUBLE, tcn->taskid, 2*n+currJ, comm.comm);
+                                    MPI_Send(&pn, 1, MPI_INT, tcn->taskid, currJ, comm.comm);
+                                    MPI_Send(&po, 1, MPI_INT, tcn->taskid, n+currJ, comm.comm);
+                                    MPI_Send(rj+po, pn, MPI_DOUBLE, tcn->taskid, 2*n+currJ, comm.comm);
                                     break;
                                 }
 

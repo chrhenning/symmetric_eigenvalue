@@ -63,9 +63,9 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
   double eps = 1e-14;
 
   // scan z for zero element and mark it in G with -2
-  for (i = 0; i < n; i++) {
-   if (z[i] < eps) G[i] = -2;
-  }
+//  for (i = 0; i < n; i++) {
+//   if (z[i] < eps) G[i] = -2;
+//  }
 
 //#pragma omp parallel for default(shared) private(i) schedule(static)
   for (i = 0; i < n; ++i) {
@@ -86,24 +86,24 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     if (G[SD[i].i] != -2) { // for those elements correspond to non-zero z
         nextNonZero = i + 1;
         while (G[SD[nextNonZero].i] == -2) {
-        nextNonZero++;
+        if (++nextNonZero == n) break;
         }
         if (nextNonZero >= n) continue;
 
-      if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
-        a = SD[i].i;
-        b = SD[nextNonZero].i; 
-        r = sqrt(z[a] * z[a] + z[b] * z[b]);
-        C[node->numGR] = z[b] / r;
+//      if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
+//        a = SD[i].i;
+//        b = SD[nextNonZero].i;
+//        r = sqrt(z[a] * z[a] + z[b] * z[b]);
+//        C[node->numGR] = z[b] / r;
 
-        G[SD[i].i] = SD[nextNonZero].i;
-        z[SD[nextNonZero].i] = sqrt(z[SD[nextNonZero].i] * z[SD[nextNonZero].i] + z[SD[i].i] * z[SD[i].i]);
-        z[SD[i].i] = 0;
-        P[node->numGR] = SD[i].i;
+//        G[SD[i].i] = SD[nextNonZero].i;
+//        z[SD[nextNonZero].i] = sqrt(z[SD[nextNonZero].i] * z[SD[nextNonZero].i] + z[SD[i].i] * z[SD[i].i]);
+//        z[SD[i].i] = 0;
+//        P[node->numGR] = SD[i].i;
 
-        node->numGR++;
-      }
-      else 
+//        node->numGR++;
+//      }
+//      else
         G[SD[i].i] = -1;
     }
   }
@@ -233,12 +233,12 @@ double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int
       for (j = 0; j < n; ++j) {
         if (G[j] == -1) {
           tmp = L[i] - D[j]; 
-          printf("i =  %d, j = %d  tmp is %lg\n", i, j, tmp);
+          //printf("i =  %d, j = %d  tmp is %lg\n", i, j, tmp);
 
           N[i] += z[j]*z[j] / (tmp*tmp);
         }
       }
-      printf("%d N[i] is %lg\n", i, N[i]);
+      //printf("%d N[i] is %lg\n", i, N[i]);
       N[i] = sqrt(N[i]);
     }
   }
