@@ -221,34 +221,37 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     //    printVector(L,n);
 }
 
-double* computeNormalizationFactors(double* D, double* z, double* L, int *G, int n) {
-    double *N = malloc(n * sizeof(double));
+void computeNormalizationFactors(EVRepNode *node) {
+    int* G = node->G;
+    int n = node->n;
 
-    // TODO: what we probably should do here, is setting all normalization vectors to one, and
-    // we call getEigenVector to get each single eigenvector and compute the norm of it
+    node->N = malloc(n * sizeof(double));
+    double* N = node->N;
+    // set normalization vector to 1, to compute unnormalized eigenvectors
+    int i;
+    for (i = 0; i < n; ++i) {
+        N[i] = 1;
+    }
 
-    int i, j;
-    double tmp;
-    //#pragma omp parallel for default(shared) private(i,j,tmp) schedule(static)
+    // actual normalization vector
+    double* Ntemp = malloc(n * sizeof(double));
+
+    // current ev
+    double* ev = malloc(n * sizeof(double));
+
     for (i = 0; i < n; ++i) {
         if (G[i] != -1) {
-            N[i] = 1;
+            Ntemp[i] = 1;
         } else {
-            N[i] = 0;
-            for (j = 0; j < n; ++j) {
-                if (G[j] == -1) {
-                    tmp = L[i] - D[j];
-                    //printf("i =  %d, j = %d  tmp is %lg\n", i, j, tmp);
-
-                    N[i] += z[j]*z[j] / (tmp*tmp);
-                }
-            }
-            //printf("%d N[i] is %lg\n", i, N[i]);
-            N[i] = sqrt(N[i]);
+            getEigenVector(node, ev, i);
+            Ntemp[i] = cblas_dnrm2(n, ev, 1);
         }
     }
 
-    return N;
+    node->N = Ntemp;
+
+    free(ev);
+    free(N);
 }
 
 void getEigenVector(EVRepNode *node, double* ev, int i) {
@@ -264,7 +267,6 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     int numGR = node->numGR;
 
 
-    // TODO compute i-th eigenvector and store in ev
     int j;
     if(G[i] != -1) {
         for (j = 0; j < n; j++) {

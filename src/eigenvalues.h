@@ -31,7 +31,7 @@ void computeEigenvalues(EVRepNode *node, MPIHandle mpiHandle);
  *
  * Each normalization factor is computed as: sqrt(sum_i(z_i^2/(d_i - lambda_i)^2))
  */
-double* computeNormalizationFactors(double* D, double* z, double* L, int* G, int n);
+void computeNormalizationFactors(EVRepNode *node);
 
 void getEigenVector(EVRepNode *node, double* ev, int i);
 
