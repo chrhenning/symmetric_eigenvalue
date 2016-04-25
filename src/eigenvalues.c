@@ -25,6 +25,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     double* z = NULL;
     double* L = NULL;
     double* C = NULL;
+    double* S = NULL;
     int* G = NULL;
     int* P = NULL;
     double roh;
@@ -34,6 +35,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         node->G = malloc(n * sizeof(int));
         node->P = malloc(n * sizeof(int));
         node->C = malloc(n * sizeof(double));
+        node->S = malloc(n * sizeof(double));
         /*
      * Store eigenvalues in new array (do not overwrite D), since the elements in D are needed later on to compute the eigenvectors)S
      */
@@ -45,6 +47,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         G = node->G;
         P = node->P;
         C = node->C;
+        S = node->S;
         roh = node->beta * node->theta;
         n = node->n;
         node->numGR = 0;
@@ -96,7 +99,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                 continue;
             }
 
-            if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
+            if (fabs(SD[nextNonZero].e - SD[i].e) < 1e-5) {
               //printf("Deflation happens (d) for element %g\n", SD[i].i);
 
               a = SD[i].i;
@@ -105,6 +108,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
               c = z[b] / r;
               s = z[a] / r;
               C[node->numGR] = c;
+              S[node->numGR] = s;
 
 
               G[SD[i].i] = SD[nextNonZero].i;
@@ -284,6 +288,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
   double* L = node->L;
   double* N = node->N;
   double* C = node->C;
+  double* S = node->S;
   int* G = node->G;
   int* P = node->P;
   double roh = node->beta * node->theta;
@@ -327,7 +332,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     a = P[j];
     b = G[a];
     c = C[j];
-    s = sqrt(1 - c * c); // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
+    s = S[j]; // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
 
     tmpi = c * ev[a] + s * ev[b];
     tmpj = -s * ev[a] + c * ev[b];
