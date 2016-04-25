@@ -262,6 +262,7 @@ void computeNormalizationFactors(EVRepNode *node) {
   free(ev);
   free(N);
 }
+
 void getEigenVector(EVRepNode *node, double* ev, int i) {
   double* D = node->D;
   double* z = node->z;
@@ -284,77 +285,39 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
       } else {
         ev[j] = 0;
       }
-      =======
-        node->N = Ntemp;
-
-      free(ev);
-      free(N);
     }
-
-    void getEigenVector(EVRepNode *node, double* ev, int i) {
-      double* D = node->D;
-      double* z = node->z;
-      double* L = node->L;
-      double* N = node->N;
-      double* C = node->C;
-      int* G = node->G;
-      int* P = node->P;
-      double roh = node->beta * node->theta;
-      int n = node->n;
-      int numGR = node->numGR;
-
-
-      int j;
-      if(G[i] != -1) {
-        for (j = 0; j < n; j++) {
-          if (j == i){
-            ev[j] = 1;
-          } else {
-            ev[j] = 0;
-          }
-        }
+  } else {
+    for (j = 0; j < n; j ++)
+      if (G[j] < -1) {
+        ev[j] = 0;
       } else {
-        for (j = 0; j < n; j ++)
-          if (G[j] < -1) {
-            ev[j] = 0;
-          } else {
-            ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
-          }
-
-        >>>>>>> 4d11c959ec1fb7d138ef9bb63705db752427f33a
+        ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
       }
-    } else {
-      for (j = 0; j < n; j ++)
-        if (G[j] < -1) {
-          ev[j] = 0;
-        } else {
-          ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
-        }
-
-    }
-
-
-    /* recover the original rank-one update
-     * apply the inverse of Givens rotation from outside to inside
-     * for example, if the Givens rotation on the original problem is
-     * G3 * G2 * G1 * (D + zz') G1' * G2' * G3'
-     * The order here should be G3^-1, G2^-1 nad G1^-1 */
-
-    //#pragma omp parallel for default(shared) private(j) schedule(static)
-    for (j = numGR - 1; j >= 0 ; j--) {
-      int a, b;
-      double s, c;
-      double tmpi, tmpj;
-
-      a = P[j];
-      b = G[a];
-      c = C[j];
-      s = sqrt(1 - c * c); // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
-
-      tmpi = c * ev[a] + s * ev[b];
-      tmpj = -s * ev[a] + c * ev[b];
-      ev[a] = tmpi;
-      ev[b] = tmpj;
-    }
   }
+
+
+
+  /* recover the original rank-one update
+   * apply the inverse of Givens rotation from outside to inside
+   * for example, if the Givens rotation on the original problem is
+   * G3 * G2 * G1 * (D + zz') G1' * G2' * G3'
+   * The order here should be G3^-1, G2^-1 nad G1^-1 */
+
+  //#pragma omp parallel for default(shared) private(j) schedule(static)
+  for (j = numGR - 1; j >= 0 ; j--) {
+    int a, b;
+    double s, c;
+    double tmpi, tmpj;
+
+    a = P[j];
+    b = G[a];
+    c = C[j];
+    s = sqrt(1 - c * c); // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
+
+    tmpi = c * ev[a] + s * ev[b];
+    tmpj = -s * ev[a] + c * ev[b];
+    ev[a] = tmpi;
+    ev[b] = tmpj;
+  }
+}
 
