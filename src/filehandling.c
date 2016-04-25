@@ -458,7 +458,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
                                             evtic = omp_get_wtime();
-                                            getEigenVector(tcn, ev, c);                                            
+                                            getEigenVector(tcn, ev, c);
                                             evtoc = omp_get_wtime();
                                             evsum += (evtoc - evtic);
 
@@ -483,6 +483,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     evtic = omp_get_wtime();
                                     getEigenVector(root, ev, i);
                                     evtoc = omp_get_wtime();
+                                    //if (currJ > 15) printVector(ev, n);
                                     evsum += (evtoc - evtic);
                                     //#pragma omp parallel for default(shared) private(k) schedule(static)
                                     for (k = 0; k < pn; ++k) {

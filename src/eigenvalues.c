@@ -60,12 +60,12 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     // copy and sort diagonal elements
     DiagElem* SD = malloc(n * sizeof(DiagElem));
     int i;
-    double eps = 1e-14;
+    double eps = 1e-6;
 
     // scan z for zero element and mark it in G with -2
     for (i = 0; i < n; i++) {
         if (fabs(z[i]) < eps) {
-            //printf("Deflation happens (z) for index %d\n", i);
+            printf("Deflation happens (z) for index %d\n", i);
             G[i] = -2;
         }
     }
@@ -97,7 +97,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
             }
 
             if (fabs(SD[nextNonZero].e - SD[i].e) < eps) {
-                //printf("Deflation happens (d) for element %g\n", SD[i].i);
+              printf("Deflation happens (d) for element %g\n", SD[i].i);
 
               a = SD[i].i;
               b = SD[nextNonZero].i;
@@ -147,6 +147,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
        If sign(f(c)) = sign(f(a)) then a ← c else b ← c # new interval
        EndWhile
        */
+    int boundaryHandled = 0;
     //#pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) { // for each eigenvalue
         double lambda = 0;
@@ -162,13 +163,14 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         } else {
             // set initial interval
             if (roh < 0) {
-                if (i == 0) {
+                if (!boundaryHandled) {
                     a = di - normZ;
                     int j = 0;
                     while(secularEquation(a, roh, z, D, n, G) < 0) {
                         a -= normZ;
                         assert(++j < 100);
                     }
+                    boundaryHandled = 1;
                 } else {
                     prevNonZeroIdx = i - 1;
                     while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the first element is zero into consideration
@@ -178,7 +180,13 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                 b = di;
             } else {
                 a = di;
-                if (i == n-1) {
+
+                prevNonZeroIdx = i + 1;
+                while(prevNonZeroIdx < n && G[SD[prevNonZeroIdx].i] != -1) { // TODO: Take the last element is zero into consideration
+                    prevNonZeroIdx++;
+                }
+
+                if (prevNonZeroIdx >= n) {
                     b = di + normZ;
                     int j = 0;
                     while(secularEquation(b, roh, z, D, n, G) < 0) {
@@ -186,9 +194,6 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
                         assert(++j < 100);
                     }
                 } else {
-                    prevNonZeroIdx = i + 1;
-                    while(G[SD[prevNonZeroIdx].i] != -1) // TODO: Take the last element is zero into consideration
-                        prevNonZeroIdx++;
                     b = SD[prevNonZeroIdx].e;
                 }
             }
@@ -214,7 +219,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
           //if (j==10)
           //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
 
-          if (flambda == 0 || (b-a)/2 < eps)
+          if (flambda == 0 || (b-a)/2 < 1e-14)
             break;
 
           // if sign(a) == sign(lambda)
@@ -260,6 +265,10 @@ void computeNormalizationFactors(EVRepNode *node) {
     } else {
       getEigenVector(node, ev, i);
       Ntemp[i] = cblas_dnrm2(n, ev, 1);
+      if (fabs(node->L[i]-node->D[i])<1e-18) {
+          printf("Debug %d, %g, %d, di = %g, li = %g\n",i, fabs(node->L[i]-node->D[i]), node->G[i], node->D[i], node->L[i]);
+          printVector(ev, n);
+      }
     }
   }
 

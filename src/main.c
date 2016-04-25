@@ -504,7 +504,6 @@ int main (int argc, char **argv)
                     Q2l = malloc(nq2 * sizeof(double));
                     MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
                     MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
-                    //printVector(currNode->D, currNode->n);
                     //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*
@@ -530,6 +529,10 @@ int main (int argc, char **argv)
                     L = currNode->L;
                     // compute normalization factors
                     computeNormalizationFactors(currNode);
+//                    printVector(currNode->L, currNode->n);
+//                    printVector(currNode->N, currNode->n);
+//                    printVector(currNode->D, currNode->n);
+//                    printVector(currNode->z, currNode->n);
 
                     /*
                      * It holds that T = W L W^T, where W = QU
