@@ -332,7 +332,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
     a = P[j];
     b = G[a];
     c = C[j];
-    //s = S[j]; // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
+    s = S[j]; // TODO: probably it's better to store s as well, since the product c*c halves the precision (e^-10 * e^-10 = e^-20)
 
     tmpi = c * ev[a] + s * ev[b];
     tmpj = -s * ev[a] + c * ev[b];
