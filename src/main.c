@@ -469,10 +469,10 @@ int main (int argc, char **argv)
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
             //printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
-            MPI_Ssend(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
-            MPI_Ssend(L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
-            MPI_Ssend(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
-            MPI_Ssend(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
+            MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, taskid*numtasks+4, MPI_COMM_WORLD);
+            MPI_Send(L, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+5, MPI_COMM_WORLD);
+            MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+6, MPI_COMM_WORLD);
+            MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+7, MPI_COMM_WORLD);
 
             // this task can't be the master, so there is no work left to do for it
             if (performedMerge) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
@@ -495,18 +495,19 @@ int main (int argc, char **argv)
                     EVRepNode* leftChild = currNode->left;
                     assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);
 
+                    int rtaskid = currNode->right->taskid; // taskid of right child
                     // receive size of matrix to receive
-                    MPI_Recv(&nq2, 1, MPI_INT, currNode->right->taskid, 4, MPI_COMM_WORLD, &status);
+                    MPI_Recv(&nq2, 1, MPI_INT, rtaskid, rtaskid*numtasks+4, MPI_COMM_WORLD, &status);
                     assert(currNode->n == nq1+nq2);
                     currNode->D = malloc(currNode->n * sizeof(double));
                     memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
 
                     // receive eigenvalues and necessary part of eigenvectors from right child in tree
-                    MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, currNode->right->taskid, 5, MPI_COMM_WORLD, &status);
+                    MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+5, MPI_COMM_WORLD, &status);
                     Q2f = malloc(nq2 * sizeof(double));
                     Q2l = malloc(nq2 * sizeof(double));
-                    MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
-                    MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
+                    MPI_Recv(Q2f, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+6, MPI_COMM_WORLD, &status);
+                    MPI_Recv(Q2l, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+7, MPI_COMM_WORLD, &status);
                     //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*

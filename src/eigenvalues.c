@@ -88,7 +88,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     int a, b;
     double c, s ,r, tmpi, tmpj;
     int nextNonZero;
-    for (i = 0; i < n; i++){
+    for (i = 0; i < n-1; i++){
         if (G[SD[i].i] != -2) { // for those elements correspond to non-zero z
             nextNonZero = i + 1;
             while (G[SD[nextNonZero].i] == -2) {
@@ -128,6 +128,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
               G[SD[i].i] = -1;
         }
     }
+    G[SD[n-1].i] = -1;
 
     /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
      * If roh < 0, then the first eigenvalue is before the first d_i */
