@@ -526,6 +526,13 @@ int main (int argc, char **argv)
                 // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
                 rtic = omp_get_wtime();
                 computeEigenvalues(currNode, mpiHandle);
+//                if (currNode->taskid == taskid) { // just to debug
+//                    currNode->L = malloc(currNode->n * sizeof(double));
+//                    memcpy(currNode->L, currNode->D, currNode->n*sizeof(double));
+//                    currNode->G = malloc(currNode->n * sizeof(int));
+//                    for (k = 0; k < currNode->n; ++k)
+//                        currNode->G[k] = -1;
+//                }
                 rtoc = omp_get_wtime();
                 rsum += rtoc - rtic;
 
@@ -647,7 +654,7 @@ int main (int argc, char **argv)
 
     freeEVRepTree(&evTree);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
     MPI_FINALIZE();
     return 0;
 }

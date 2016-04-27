@@ -42,8 +42,9 @@ double* computeZ(double* Q1l, double* Q2f, int nq1, int nq2, double theta) {
     // multiply first row of Q2 by theta^-1
     int i;
     #pragma omp parallel for default(shared) private(i) schedule(static)
-    for(i = 0; i < nq2; ++i)
+    for(i = 0; i < nq2; ++i) {
         z[nq1+i] = Q2f[i] / theta;
+    }
 
     return z;
 }

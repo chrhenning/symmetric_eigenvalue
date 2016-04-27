@@ -8,7 +8,7 @@
 inline double secularEquation(double lambda, double roh, double* z, double* D, int n, int* G) {
     double sum = 0;
     int i;
-    //#pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
+    #pragma omp parallel for default(shared) private(i) schedule(static) reduction(+:sum)
     for (i = 0; i < n; ++i) {
         if (G[i] == -1)
             sum += z[i]*z[i] / (D[i]-lambda);
@@ -21,6 +21,8 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     int taskid = mpiHandle.taskid;
     int numtasks = mpiHandle.numtasks;
 
+    int i;
+
     double* D = NULL;
     double* z = NULL;
     double* L = NULL;
@@ -32,6 +34,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
     int n;
 
     if (taskid == node->taskid) {
+        n = node->n;
         node->G = malloc(n * sizeof(int));
         node->P = malloc(n * sizeof(int));
         node->C = malloc(n * sizeof(double));
@@ -49,8 +52,12 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         C = node->C;
         S = node->S;
         roh = node->beta * node->theta;
-        n = node->n;
         node->numGR = 0;
+
+        // initialize G properly, because later on I perform tests like, G[i] != -2, where G[i] has a random value at this time
+        #pragma omp parallel for default(shared) private(i) schedule(static)
+        for (i = 0; i < n; ++i)
+            G[i] = -1;
     }
 
     // we don't use parallelism yet, so just return if other task
@@ -62,10 +69,10 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
     // copy and sort diagonal elements
     DiagElem* SD = malloc(n * sizeof(DiagElem));
-    int i;
     double eps = 1e-6;
 
     // scan z for zero element and mark it in G with -2
+#pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; i++) {
         if (fabs(z[i]) < eps) {
             //printf("Deflation happens (z) for index %d\n", i);
@@ -73,7 +80,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
         }
     }
 
-    //#pragma omp parallel for default(shared) private(i) schedule(static)
+    #pragma omp parallel for default(shared) private(i) schedule(static)
     for (i = 0; i < n; ++i) {
         SD[i].e = D[i];
         SD[i].i = i;
@@ -112,7 +119,7 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
 
 
               G[SD[i].i] = SD[nextNonZero].i;
-              z[SD[nextNonZero].i] = sqrt(z[SD[nextNonZero].i] * z[SD[nextNonZero].i] + z[SD[i].i] * z[SD[i].i]);
+              z[SD[nextNonZero].i] = r;
               z[SD[i].i] = 0;
               P[node->numGR] = SD[i].i;
 
@@ -124,11 +131,8 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
               D[b] = tmpj;
               node->numGR++;
             }
-            else
-              G[SD[i].i] = -1;
         }
     }
-    G[SD[n-1].i] = -1;
 
     /* Note, if roh > 0, then the last eigenvalue is behind the last d_i
      * If roh < 0, then the first eigenvalue is before the first d_i */
@@ -221,8 +225,12 @@ void computeEigenvalues(EVRepNode* node, MPIHandle mpiHandle) {
           //if (fb == INFINITY || fb == -INFINITY)
           //   fb = (roh > 0 ? INFINITY : -INFINITY);
 
-          //if (j==1)
-          //    printf("interval: %g, %g, %g, %g, %g, %g\n", fa, flambda, fb, a, lambda, b);
+//          if (isnan(a) || isnan(b) || isnan(lambda)) {
+//              printf("interval: %g, %g, %g, %g, %g, %g %d\n", fa, flambda, fb, a, lambda, b, j);
+//              printVector(z,n);
+//              printf("%g\n",normZ);
+//              MPI_ABORT(MPI_COMM_WORLD, 1);
+//          }
 
           if (flambda == 0 || (b-a)/2 < 1e-14)
             break;
@@ -254,6 +262,7 @@ void computeNormalizationFactors(EVRepNode *node) {
   double* N = node->N;
   // set normalization vector to 1, to compute unnormalized eigenvectors
   int i;
+  #pragma omp parallel for default(shared) private(i) schedule(static)
   for (i = 0; i < n; ++i) {
     N[i] = 1;
   }
@@ -270,10 +279,6 @@ void computeNormalizationFactors(EVRepNode *node) {
     } else {
       getEigenVector(node, ev, i);
       Ntemp[i] = cblas_dnrm2(n, ev, 1);
-      if (fabs(node->L[i]-node->D[i])<1e-18) {
-          printf("Debug %d, %g, %d, di = %g, li = %g\n",i, fabs(node->L[i]-node->D[i]), node->G[i], node->D[i], node->L[i]);
-          printVector(ev, n);
-      }
     }
   }
 
@@ -292,7 +297,6 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
   double* S = node->S;
   int* G = node->G;
   int* P = node->P;
-  double roh = node->beta * node->theta;
   int n = node->n;
   int numGR = node->numGR;
 
@@ -300,6 +304,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
   // TODO compute i-th eigenvector and store in ev
   int j;
   if(G[i] != -1) {
+      #pragma omp parallel for default(shared) private(j) schedule(static)
     for (j = 0; j < n; j++) {
       if (j == i){
         ev[j] = 1;
@@ -308,11 +313,21 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
       }
     }
   } else {
+      #pragma omp parallel for default(shared) private(j) schedule(static)
     for (j = 0; j < n; j ++)
       if (G[j] < -1) {
         ev[j] = 0;
       } else {
         ev[j] = z[j] / ((D[j] - L[i]) * N[i]);
+//        if (isinf(ev[j])) {
+//            printVector(ev,n);
+//            printVector(D,n);
+//            printVector(L,n);
+//            printVector(N,n);
+//            printVector(z,n);
+//            printf("test %d, %.20g %.20g\n", G[j], D[j],L[j]);
+//            break;
+//        }
       }
   }
 
@@ -324,7 +339,7 @@ void getEigenVector(EVRepNode *node, double* ev, int i) {
    * G3 * G2 * G1 * (D + zz') G1' * G2' * G3'
    * The order here should be G3^-1, G2^-1 nad G1^-1 */
 
-  //#pragma omp parallel for default(shared) private(j) schedule(static)
+  // don't use openMP fur this loop, the rotations have to be applied in a certain order
   for (j = numGR - 1; j >= 0 ; j--) {
     int a, b;
     double s, c;
