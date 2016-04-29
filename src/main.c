@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <omp.h>
 #include <assert.h>
+#include <math.h>
 #include "mkl.h"
 
 #include "helper.h"
@@ -193,8 +194,10 @@ int main (int argc, char **argv)
         printf("Number of MPI tasks is: %d\n", numtasks);
 
         for (i = 0; i < n-1; ++i) {
+            assert(D[i] != 0);
             assert(E[i] != 0);
         }
+        assert(D[n-1] != 0);
 
         // create copies of E and D
         OD = malloc(n * sizeof(double));
@@ -205,8 +208,8 @@ int main (int argc, char **argv)
 
     StartOfAlgorithm:
 
-    if (taskid == MASTER)
-        printTridiagonalMatrix(D,E,n);
+    //if (taskid == MASTER)
+    //    printTridiagonalMatrix(D,E,n);
 
     // in case the MASTER tells us we should end here
     MPI_Bcast(&endProgram,1,MPI_INT,MASTER,MPI_COMM_WORLD);
@@ -352,8 +355,32 @@ int main (int argc, char **argv)
                 // at each split that we perform, we have to keep track of the lost beta entry
                 // save beta for later conquer phase and modify diagonal elements
                 currNode->beta = E[n1-1];
-                // TODO: choose more meaningful theta
-                currNode->theta = 1;
+                /* Chose the theta value */
+                // last diagonal element of T1 and first of T2
+                double dl = D[n1-1];
+                double df = D[n1];
+                // if dl and df have the same sign
+                if ((dl > 0 && df > 0) || (dl < 0 && df < 0)) {
+                    // choose theta, such that -theta*beta has the same sign as df,dl
+                    if ((dl * (-currNode->beta)) < 0) // dl,df and -beta have not the same sign
+                        currNode->theta = -1;
+                    else
+                        currNode->theta = 1;
+                } else {
+                    // choose sign of theta, such that -theta*beta has the same sign as dl
+                    if ((dl * (-currNode->beta)) < 0) // dl and -beta have not the same sign
+                        currNode->theta = -1;
+                    else
+                        currNode->theta = 1;
+
+                    // choose magnitude of theta, such that severe digit loss is avoided when computing df - beta/theta
+                    // if |beta| < |df| => make beta/theta smaller than beta
+                    if (fabs(currNode->beta) < fabs(df)) // TODO: overflow controls
+                        currNode->theta = 1000*currNode->beta;
+                    else
+                        currNode->theta = currNode->beta / 1000;
+                }
+
                 // modify last diagonal element of T1
                 D[n1-1] -= currNode->theta * currNode->beta;
                 // modify first diagonal element of T2
