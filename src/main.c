@@ -193,10 +193,8 @@ int main (int argc, char **argv)
         printf("Number of MPI tasks is: %d\n", numtasks);
 
         for (i = 0; i < n-1; ++i) {
-            assert(D[i] != 0);
             assert(E[i] != 0);
         }
-        assert(D[n-1] != 0);
 
         // create copies of E and D
         OD = malloc(n * sizeof(double));
@@ -207,8 +205,8 @@ int main (int argc, char **argv)
 
     StartOfAlgorithm:
 
-    //if (taskid == MASTER)
-    //    printTridiagonalMatrix(D,E,n);
+    if (taskid == MASTER)
+        printTridiagonalMatrix(D,E,n);
 
     // in case the MASTER tells us we should end here
     MPI_Bcast(&endProgram,1,MPI_INT,MASTER,MPI_COMM_WORLD);
