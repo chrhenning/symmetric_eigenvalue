@@ -315,12 +315,19 @@ int main (int argc, char **argv)
     // Note, our goal is to have equally sized leaves
     int leafSize, sizeRemainder;
     if (taskid == 0) {
-        leafSize = n / numtasks; // FIXME: if leaf size is too small, we have to use less nodes for computation
+        leafSize = n / numtasks;
         sizeRemainder = n % numtasks;
     }
     MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
-    if (taskid == MASTER) printf("Average leaf size will be %d\n", leafSize);
+    if (taskid == MASTER) {
+        if (leafSize == 0) {
+            fprintf (stderr, "Leaf Size is too small! Reduce number of tasks.\n");
+            MPI_ABORT(MPI_COMM_WORLD, 4);
+        }
+
+        printf("Average leaf size will be %.1lf\n", n*1.0/numtasks);
+    }
     // the actual leafsize of the current task
     int nl = leafSize + (taskid < sizeRemainder ? 1 : 0); // FIXME: delete me (stored in tree)
     // helper variables
@@ -564,7 +571,10 @@ int main (int argc, char **argv)
                 if (currNode->taskid == taskid) {
                     L = currNode->L;
                     // compute normalization factors
+                    evtic = omp_get_wtime(); // mainly ev extraction task
                     computeNormalizationFactors(currNode);
+                    evtoc = omp_get_wtime();
+                    evsum += evtoc - evtic;
 //                    printVector(currNode->L, currNode->n);
 //                    printVector(currNode->N, currNode->n);
 //                    printVector(currNode->D, currNode->n);
@@ -664,7 +674,7 @@ int main (int argc, char **argv)
         printf("\n");
         printf("Required time to compute all eigenvalues: %f seconds\n", elapsedTime);
         printf("Required time for root finding: %f seconds; fraction: %.1f%%\n", rsum, 100*rsum/elapsedTime);
-        printf("Required time for eigenvector extraction: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
+        //printf("Required time for eigenvector extraction from U_i's: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
     }
 
     if (writeOutput) {
@@ -702,7 +712,7 @@ void showHelp() {
     printf("    The name of a file which contains a tridiagonal matrix in mtx format.\n");
     printf("    The eigenvalues of this matrix will then be computed.\n");
     printf(" -s NUM\n");
-    printf("    If you want to compute the eigenvalues of a predefined matrix, you may.\n");
+    printf("    If you want to compute the eigenvalues of a predefined matrix, you may\n");
     printf("    use this option to define the scheme of the matrix.\n");
     printf("    1 - Matrix will have the tridiagonal form [-1,d_i,-1] where the diagonal\n");
     printf("        elements will be evenly spaced in the interval [1,100] \n");
@@ -714,7 +724,7 @@ void showHelp() {
     printf(" -e(FILENAME)\n");
     printf("    Without this option, no eigenvectors are computed, just the eigenvalues.\n");
     printf("    If you just specify the flag -e, then all eigenvectors will be computed.\n");
-    printf("    If you specify additionally a filename, then he will read the indices\n");
+    printf("    If you specify additionally a filename, then it will read the indices\n");
     printf("    of the eigenvectors to compute from this file (each line one index).\n");
     printf("    Note, there is no blank between the option and the filename.\n");
     printf("\n");

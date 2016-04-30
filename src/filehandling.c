@@ -449,12 +449,12 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     memcpy(rjTemp+po, rj+po, pn*sizeof(double));
                                     int r, c;
 
-                                    #pragma omp parallel private(r,c) // parallel region to ensure, that each thread has another array allocated for the eigenvector
+                                    #pragma omp parallel private(r,c) reduction(+:evsum) // parallel region to ensure, that each thread has another array allocated for the eigenvector
                                     {
                                         // store c-th eigenvector of U
                                         double* ev = malloc(tcn->n * sizeof(double));
 
-                                        #pragma omp for private(evtic, evtoc) reduction(+:evsum)
+                                        #pragma omp for private(evtic, evtoc)
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
                                             evtic = omp_get_wtime();
@@ -561,9 +561,11 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     }
 
     if (taskid == MASTER) {
-        printf("\n");
-        printf("Required time for backtransformation: %f seconds\n", esum);
-        printf("Required time eigenvector extraction within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
+        if (evToCompute.all || evToCompute.n > 0) {
+            printf("\n");
+            printf("Required time for backtransformation: %f seconds\n", esum);
+            //printf("Required time eigenvector extraction from U_i's within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
+        }
     }
 
     //MPI_Barrier(comm.comm);
