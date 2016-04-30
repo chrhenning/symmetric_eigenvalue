@@ -624,7 +624,8 @@ int main (int argc, char **argv)
                             evtic = omp_get_wtime();
                             getEigenVector(currNode, ev, i);
                             evtoc = omp_get_wtime();
-                            evsum += evtoc - evtic;
+                            if (omp_get_thread_num() == 0) // we want to measure the sequential runtime, not the runtime accumulated from each task
+                                evsum += evtoc - evtic;
 
                             Wf[i] = 0;
                             for (j = 0; j < nq1; ++j)
@@ -674,7 +675,7 @@ int main (int argc, char **argv)
         printf("\n");
         printf("Required time to compute all eigenvalues: %f seconds\n", elapsedTime);
         printf("Required time for root finding: %f seconds; fraction: %.1f%%\n", rsum, 100*rsum/elapsedTime);
-        //printf("Required time for eigenvector extraction from U_i's: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
+        printf("Required time for eigenvector extraction from U_i's: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
     }
 
     if (writeOutput) {

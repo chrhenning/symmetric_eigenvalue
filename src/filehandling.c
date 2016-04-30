@@ -460,7 +460,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                             evtic = omp_get_wtime();
                                             getEigenVector(tcn, ev, c);
                                             evtoc = omp_get_wtime();
-                                            evsum += (evtoc - evtic);
+                                            if (omp_get_thread_num() == 0) // we want to measure the sequential runtime, not the runtime accumulated from each task
+                                                evsum += (evtoc - evtic);
 
                                             rj[tcn->o+c] = 0;
                                             for (r = 0; r < pn; ++r) {
@@ -564,7 +565,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
         if (evToCompute.all || evToCompute.n > 0) {
             printf("\n");
             printf("Required time for backtransformation: %f seconds\n", esum);
-            //printf("Required time eigenvector extraction from U_i's within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
+            printf("Required time eigenvector extraction from U_i's within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
         }
     }
 
