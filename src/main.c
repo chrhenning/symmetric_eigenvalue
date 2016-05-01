@@ -566,7 +566,7 @@ int main (int argc, char **argv)
 //                        currNode->G[k] = -1;
 //                }
                 rtoc = omp_get_wtime();
-                rsum += rtoc - rtic;
+                rsum += (rtoc - rtic);
 
                 if (currNode->taskid == taskid) {
                     L = currNode->L;
@@ -691,6 +691,8 @@ int main (int argc, char **argv)
     freeEVRepTree(&evTree);
 
     //MPI_Barrier(MPI_COMM_WORLD);
+    if (taskid == MASTER)
+        printf("\nProgram finished successfully!\n");
     MPI_FINALIZE();
     return 0;
 }
