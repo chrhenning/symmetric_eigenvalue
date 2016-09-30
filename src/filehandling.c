@@ -248,6 +248,11 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     // size of original T (OE, OD)
     int n;
 
+    // time measurement for backtransformation
+    double esum = 0, etic, etoc;
+    // time measurement for eigenvector calculation
+    double evsum = 0, evtic, evtoc;
+
     // get root node
     EVRepNode* root = NULL;
     if (taskid == MASTER) {
@@ -347,6 +352,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
 
         // if we should extract the current eigenvector
         if (computeCurrEV) {
+            etic = omp_get_wtime();
 
             // extract current eigenvector
             if (Q != NULL) { // if we haven't applied cuppens algorithm (no splits)
@@ -368,7 +374,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                 int currJ = cn->o;
                 // extract 'j'-th component of xi
                 for (j = 0; j < nl; ++j) {
-                    MPI_Barrier(comm.comm);
+                    //printf("Task %d working on row %d\n", taskid, currJ);
                     cn = &(t->t[t->d-1].s[taskid]);
                     currJ = cn->o + j;
                     // compute line currJ
@@ -391,6 +397,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                         if (s < t->d-1) { // we have to receive the rows from our right child
                             if (cn->right != cn->left)
                                 rowsToForward = cn->right->numLeaves;
+                            else
+                                rowsToForward = 0;
                         }
                         // I have to forward a row for each of my leaves
                         int l;
@@ -413,10 +421,17 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                             EVRepNode* tcn = cn;
                             // climb up the tree
                             int ts;
-                            for (ts = s; ts >= 0; --ts) {
+                            for (ts = s; ts >= 0; --ts) {                                
+                                // if I climb up along a single path without splits
+                                if (ts < t->d-1 && tcn->left == tcn->right) {
+                                    //printf("task %d forward in stage %d\n", taskid, ts);
+                                    tcn = tcn->parent;
+                                    continue;
+                                }
 
-                                // send current row to parent
+                                // send current row to parent                                
                                 if (tcn->taskid != taskid) {
+                                    //printf("Task %d forward row %d to %d\n", taskid, currJ, tcn->taskid);
                                     MPI_Send(&pn, 1, MPI_INT, tcn->taskid, currJ, comm.comm);
                                     MPI_Send(&po, 1, MPI_INT, tcn->taskid, n+currJ, comm.comm);
                                     MPI_Send(rj+po, pn, MPI_DOUBLE, tcn->taskid, 2*n+currJ, comm.comm);
@@ -426,6 +441,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                 // if U_s is stored in this task
                                 // multiply row rj with U_ts
                                 if (ts < t->d-1 && ts > 0) { // if ts == d-1: nothing to do, since we already copied row from Q
+
                                     assert(tcn->L != NULL);
                                     assert(tcn->o <= po);
                                     int ro = po - tcn->o;
@@ -433,15 +449,19 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     memcpy(rjTemp+po, rj+po, pn*sizeof(double));
                                     int r, c;
 
-                                    #pragma omp parallel private(r,c) // parallel region to ensure, that each thread has another array allocated for the eigenvector
+                                    #pragma omp parallel private(r,c) reduction(+:evsum) // parallel region to ensure, that each thread has another array allocated for the eigenvector
                                     {
                                         // store c-th eigenvector of U
                                         double* ev = malloc(tcn->n * sizeof(double));
 
-                                        #pragma omp for
+                                        #pragma omp for private(evtic, evtoc)
                                         for (c = 0; c < tcn->n; ++c) {
                                             // get c-th eigenvector of U
+                                            evtic = omp_get_wtime();
                                             getEigenVector(tcn, ev, c);
+                                            evtoc = omp_get_wtime();
+                                            if (omp_get_thread_num() == 0) // we want to measure the sequential runtime, not the runtime accumulated from each task
+                                                evsum += (evtoc - evtic);
 
                                             rj[tcn->o+c] = 0;
                                             for (r = 0; r < pn; ++r) {
@@ -450,7 +470,7 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                         }
 
                                         free(ev);
-                                    }
+                                    }                                    
                                 }
 
                                 // compute element currJ of eigenvector i by multiplying currJ-th row of U with i-th column of U_0
@@ -461,7 +481,11 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                                     // store i-th eigenvector of U
                                     double* ev = malloc(n * sizeof(double));
                                     // get i-th eigenvector of U
+                                    evtic = omp_get_wtime();
                                     getEigenVector(root, ev, i);
+                                    evtoc = omp_get_wtime();
+                                    //if (currJ > 15) printVector(ev, n);
+                                    evsum += (evtoc - evtic);
                                     //#pragma omp parallel for default(shared) private(k) schedule(static)
                                     for (k = 0; k < pn; ++k) {
                                         xi[currJ] += rj[po+k] * ev[po+k];
@@ -512,6 +536,8 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
                 // write results to file
                 fprintf(f, "%20.19g %20.19g\n", lambda, norm);
             }
+            etoc = omp_get_wtime();
+            esum += (etoc - etic);
         } else {
             if (taskid == MASTER) {
                 // we do not compute eigenvector i
@@ -534,6 +560,15 @@ int writeResults(const char* filename, double* OD, double* OE, EVRepTree* t, MPI
     if (taskid == MASTER) {
         if (f !=stdout) fclose(f);
     }
+
+    if (taskid == MASTER) {
+        if (evToCompute.all || evToCompute.n > 0) {
+            printf("\n");
+            printf("Required time for backtransformation: %f seconds\n", esum);
+            printf("Required time eigenvector extraction from U_i's within backtransformation: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/esum);
+        }
+    }
+
     //MPI_Barrier(comm.comm);
     return 0;
 }

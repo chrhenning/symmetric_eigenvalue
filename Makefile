@@ -22,25 +22,36 @@ cuppen: $(OBJS)
 clean:
 	rm -f $(OBJ_NAME)
 
-# this standard parameters will be overriden, if you call the Makefile and assign them as parameters
+# This standard parameters will be overriden, if you call the Makefile and assign them as parameters.
+# Example call: make run NUMTASKS=8 DIM=100
 NUMTASKS=4
 DIM=16
 OUT=out.txt
 SCHEME=1
 
+# Gerneral execution command:
 # mpirun -n 1 -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s 1 -n 10 out.txt
+
+# run program wih given scheme and dimension
 run: 
 	mpirun -n $(NUMTASKS) -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s $(SCHEME) -n $(DIM) $(OUT)
 
+# same as run, but additionally output the results
 runo: run
 	cat $(OUT)
 	
+# same as run, but compile the program first
 runc: cuppen run
-	
+
+# same as runo, but compile the program first	
 runoc: cuppen runo
 
 # same as run, but all eigenvalues will be computed
 rune: 
 	mpirun -n $(NUMTASKS) -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s $(SCHEME) -n $(DIM) -e $(OUT) 
 
-runec: cuppen rune 	
+# same as rune, but compile the program first
+runec: cuppen rune 
+
+# Example command, if you want to compute only selected eigenvalues specified in eigenvectors.txt
+# mpirun -n 1 -f ./mpd.hosts -perhost 1 -genv I_MPI_DEVICE=ssm -genv OMP_NUM_THREADS 8 ./cuppens -s 1 -n 10 -eeigenvectors.txt out.txt	

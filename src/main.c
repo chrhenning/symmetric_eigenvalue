@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <omp.h>
 #include <assert.h>
+#include <math.h>
 #include "mkl.h"
 
 #include "helper.h"
@@ -54,8 +55,12 @@ int main (int argc, char **argv)
     // helper variable to easily access current node in tree
     EVRepNode* currNode = NULL;
 
-    // for time measurements
+    // for time measurement of eigenvalue computation
     double tic, toc;
+    // time measurement for root finding
+    double rsum = 0, rtic, rtoc;
+    // time measurement for eigenvector computation
+    double evsum = 0, evtic, evtoc;
 
     // name of output file
     char* outputfile = NULL;
@@ -203,6 +208,9 @@ int main (int argc, char **argv)
 
     StartOfAlgorithm:
 
+    //if (taskid == MASTER)
+    //    printTridiagonalMatrix(D,E,n);
+
     // in case the MASTER tells us we should end here
     MPI_Bcast(&endProgram,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     if (endProgram == 1) {
@@ -307,18 +315,24 @@ int main (int argc, char **argv)
     // Note, our goal is to have equally sized leaves
     int leafSize, sizeRemainder;
     if (taskid == 0) {
-        leafSize = n / numtasks; // FIXME: if leaf size is too small, we have to use less nodes for computation
+        leafSize = n / numtasks;
         sizeRemainder = n % numtasks;
     }
     MPI_Bcast(&leafSize,1,MPI_INT,MASTER,MPI_COMM_WORLD);
     MPI_Bcast(&sizeRemainder,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+    if (taskid == MASTER) {
+        if (leafSize == 0) {
+            fprintf (stderr, "Leaf Size is too small! Reduce number of tasks.\n");
+            MPI_ABORT(MPI_COMM_WORLD, 4);
+        }
+
+        printf("Average leaf size will be %.1lf\n", n*1.0/numtasks);
+    }
     // the actual leafsize of the current task
     int nl = leafSize + (taskid < sizeRemainder ? 1 : 0); // FIXME: delete me (stored in tree)
     // helper variables
     // size of T in left resp. right subtree
     int n1,n2;
-    // number of leaves in the right subtree
-    int numLeavesRight;
 
     // stage in divide tree
     int s = 0;
@@ -327,47 +341,53 @@ int main (int argc, char **argv)
 
         // if task is to perform a split of T (Note: in the first stage, only MASTER statisfies the condition
         if (taskid % modulus == 0) {
+            // get current node in tree
+            currNode = accessNode(&evTree, s, taskid);
+
             rightChild[s] = taskid + modulus/2;
             parent[s] = taskid; // left child will stay on this node
 
-            // Compute size of left and right subtree depending on the number of childrens in this tree.
-            // The left subtree will always be a fully balanced tree (so it will have modulus/2 leaves).
-            // The right subtree has min(numtasks-(taskid+modulus/2) , modulus/2) leaves.
-            numLeavesRight = min(numtasks-rightChild[s], modulus/2);
+            n1 = currNode->left->n;
+            n2 = currNode->right->n;
 
-            n1 = modulus/2 * leafSize;
-            n2 = numLeavesRight * leafSize;
-
-            // split the remaining lines equally on the leaves
-            n1 += max(0, min(sizeRemainder-taskid, modulus/2));
-            n2 += max(0, min(sizeRemainder-rightChild[s], numLeavesRight));
-
-            // if right child does not exist (we could catch this earlier, but I just wanna make sure here that everything works as I expect)
-            if (rightChild[s] >= numtasks) {
-                assert(n2 == 0 || s < numSplitStages-1);
-                if (n2 > 0) { // we don't split the tree here, so we are going down the tree along a single path to the next stage
-                    rightChild[s] = taskid;
-                    parent[s] = taskid;
-                } else {
-                    rightChild[s] = -1;
-                    parent[s] = -1;
-                }
-
-            } else {
+            if (currNode->left != currNode->right) { // an actual split is performed
                 assert(n2 > 0);
+                assert(currNode->left->taskid != currNode->right->taskid);
 
-                printf("Task %d: Splits into (Task %d: %d; Task %d: %d)\n", taskid, taskid, n1, rightChild[s], n2);
+                //printf("Task %d: Splits into (Task %d: %d; Task %d: %d) in stage %d\n", taskid, taskid, n1, rightChild[s], n2, s);
 
-                // get current node in tree
-                currNode = accessNode(&evTree, s, taskid);
                 assert(s == 0 || parent[s-1] == currNode->parent->taskid);
                 assert(rightChild[s] == currNode->right->taskid);
 
                 // at each split that we perform, we have to keep track of the lost beta entry
                 // save beta for later conquer phase and modify diagonal elements
                 currNode->beta = E[n1-1];
-                // TODO: choose more meaningful theta
-                currNode->theta = 1;
+                /* Chose the theta value */
+                // last diagonal element of T1 and first of T2
+                double dl = D[n1-1];
+                double df = D[n1];
+                // if dl and df have the same sign
+                if ((dl > 0 && df > 0) || (dl < 0 && df < 0)) {
+                    // choose theta, such that -theta*beta has the same sign as df,dl
+                    if ((dl * (-currNode->beta)) < 0) // dl,df and -beta have not the same sign
+                        currNode->theta = -1;
+                    else
+                        currNode->theta = 1;
+                } else {
+                    // choose sign of theta, such that -theta*beta has the same sign as dl
+                    if ((dl * (-currNode->beta)) < 0) // dl and -beta have not the same sign
+                        currNode->theta = -1;
+                    else
+                        currNode->theta = 1;
+
+                    // choose magnitude of theta, such that severe digit loss is avoided when computing df - beta/theta
+                    // if |beta| < |df| => make beta/theta smaller than beta
+                    if (fabs(currNode->beta) < fabs(df)) // TODO: overflow controls
+                        currNode->theta = 1000*currNode->beta;
+                    else
+                        currNode->theta = currNode->beta / 1000;
+                }
+
                 // modify last diagonal element of T1
                 D[n1-1] -= currNode->theta * currNode->beta;
                 // modify first diagonal element of T2
@@ -377,6 +397,8 @@ int main (int argc, char **argv)
                 MPI_Send(&n2, 1, MPI_INT, rightChild[s], 1, MPI_COMM_WORLD);
                 MPI_Send(D+n1, n2, MPI_DOUBLE, rightChild[s], 2, MPI_COMM_WORLD);
                 MPI_Send(E+n1, n2-1, MPI_DOUBLE, rightChild[s], 3, MPI_COMM_WORLD);
+            } else {
+                rightChild[s] = -1;
             }
         }
 
@@ -403,6 +425,7 @@ int main (int argc, char **argv)
      * The size of the current leave is in nl.
      * The actual allocated memory is still stored in n (which will be needed in conquer phase)
      */
+    MPI_Barrier(MPI_COMM_WORLD);
 
     /**********************
      * Compute eigenpairs of leaves using QR algorithm
@@ -439,6 +462,7 @@ int main (int argc, char **argv)
 
     // reset D to L
     currNode->L = currNode->D;
+    double* L = currNode->L; // the reason why I store extra, is because this is easier then find later on the right child, which sends it to the parent node
     currNode->D = NULL;
 
     // off-diagonal elements are not needed anymore
@@ -453,6 +477,7 @@ int main (int argc, char **argv)
     if (numSplitStages == 0)
         goto EndOfAlgorithm;
 
+     MPI_Barrier(MPI_COMM_WORLD);
     /**********************
      * Conquer phase
      **********************/
@@ -463,6 +488,8 @@ int main (int argc, char **argv)
     int nq1 = nl, nq2;
     double *Q2f = NULL, *Q2l = NULL;
 
+    int performedMerge = 0; // If I haven't performed a merge yet, then I am not allowed to free Q1l,Q1f, because they still point to the leaf node
+
     // Stage s=numSplitStages-1: stage where leaves are merged (since s=0 is first split stage)
     assert(numSplitStages > 0);
     for (s = numSplitStages-1; s >= 0; s--) {
@@ -472,27 +499,22 @@ int main (int argc, char **argv)
 
         // if task should not compute the spectral decomposition of two leaves
         if (currNode->taskid != taskid && currNode->right->taskid == taskid) {
-
-
+            //printf("Task %d: Send info to %d in stage %d\n", taskid, currNode->taskid, s);
             // send eigenvalues and necessary part of eigenvectors to parent node in tree
-            MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, 4, MPI_COMM_WORLD);
-            MPI_Send(currNode->right->L, nq1, MPI_DOUBLE, currNode->taskid, 5, MPI_COMM_WORLD);
-            MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, 6, MPI_COMM_WORLD);
-            MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, 7, MPI_COMM_WORLD);
+            MPI_Send(&nq1, 1, MPI_INT, currNode->taskid, taskid*numtasks+4, MPI_COMM_WORLD);
+            MPI_Send(L, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+5, MPI_COMM_WORLD);
+            MPI_Send(Q1f, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+6, MPI_COMM_WORLD);
+            MPI_Send(Q1l, nq1, MPI_DOUBLE, currNode->taskid, taskid*numtasks+7, MPI_COMM_WORLD);
 
             // this task can't be the master, so there is no work left to do for it
-            if (s < numSplitStages-1) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
+            if (performedMerge) { // note, that the leaf nodes don't copy elements into Q1l,Q1f
                 myfree(&Q1f);
                 myfree(&Q1l);
             } else {
                 Q1f = NULL;
                 Q1l = NULL;
             }
-
-            // this task does not perform any merges anymore
-            goto EndOfAlgorithm;
         }
-
 
         // if task combines two splits in this stage
         // Note: if right == left, then the tree was not splitted in this stage (single path)
@@ -500,24 +522,25 @@ int main (int argc, char **argv)
             // for all tasks, that are leaves of the current node, they can work in parallel on the root finding problem
             if (taskid >= currNode->taskid && taskid < (currNode->taskid+currNode->numLeaves)) {
                 if (currNode->taskid == taskid) {
+                    performedMerge = 1;
                     // get current node in tree
                     EVRepNode* leftChild = currNode->left;
                     assert(leftChild != NULL && leftChild->n == nq1 && leftChild->taskid == taskid);
 
+                    int rtaskid = currNode->right->taskid; // taskid of right child
                     // receive size of matrix to receive
-                    MPI_Recv(&nq2, 1, MPI_INT, currNode->right->taskid, 4, MPI_COMM_WORLD, &status);
+                    MPI_Recv(&nq2, 1, MPI_INT, rtaskid, rtaskid*numtasks+4, MPI_COMM_WORLD, &status);
                     assert(currNode->n == nq1+nq2);
                     currNode->D = malloc(currNode->n * sizeof(double));
                     memcpy(currNode->D, leftChild->L, currNode->n*sizeof(double));
 
                     // receive eigenvalues and necessary part of eigenvectors from right child in tree
-                    MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, currNode->right->taskid, 5, MPI_COMM_WORLD, &status);
+                    MPI_Recv(currNode->D+nq1, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+5, MPI_COMM_WORLD, &status);
                     Q2f = malloc(nq2 * sizeof(double));
                     Q2l = malloc(nq2 * sizeof(double));
-                    MPI_Recv(Q2f, nq2, MPI_DOUBLE, currNode->right->taskid, 6, MPI_COMM_WORLD, &status);
-                    MPI_Recv(Q2l, nq2, MPI_DOUBLE, currNode->right->taskid, 7, MPI_COMM_WORLD, &status);
-
-                    printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
+                    MPI_Recv(Q2f, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+6, MPI_COMM_WORLD, &status);
+                    MPI_Recv(Q2l, nq2, MPI_DOUBLE, rtaskid, rtaskid*numtasks+7, MPI_COMM_WORLD, &status);
+                    //printf("Task %d: Conquer from (Task %d: %d; Task %d: %d)\n", taskid, taskid, nq1, currNode->right->taskid, nq2);
 
                     /*
                      * Compute z, where z is
@@ -533,11 +556,29 @@ int main (int argc, char **argv)
                 // compute root finding in parrallel
                 // compute eigenvalues lambda_1 of rank-one update: D + beta*theta* z*z^T
                 // Note, we may not overwrite the diagonal elements in D with the new eigenvalues, since we need those diagonal elements to compute the eigenvectors
+                rtic = omp_get_wtime();
                 computeEigenvalues(currNode, mpiHandle);
+//                if (currNode->taskid == taskid) { // just to debug
+//                    currNode->L = malloc(currNode->n * sizeof(double));
+//                    memcpy(currNode->L, currNode->D, currNode->n*sizeof(double));
+//                    currNode->G = malloc(currNode->n * sizeof(int));
+//                    for (k = 0; k < currNode->n; ++k)
+//                        currNode->G[k] = -1;
+//                }
+                rtoc = omp_get_wtime();
+                rsum += (rtoc - rtic);
 
                 if (currNode->taskid == taskid) {
+                    L = currNode->L;
                     // compute normalization factors
-                    currNode->N = computeNormalizationFactors(currNode->D,currNode->z,currNode->L,currNode->G,currNode->n);
+                    evtic = omp_get_wtime(); // mainly ev extraction task
+                    computeNormalizationFactors(currNode);
+                    evtoc = omp_get_wtime();
+                    evsum += evtoc - evtic;
+//                    printVector(currNode->L, currNode->n);
+//                    printVector(currNode->N, currNode->n);
+//                    printVector(currNode->D, currNode->n);
+//                    printVector(currNode->z, currNode->n);
 
                     /*
                      * It holds that T = W L W^T, where W = QU
@@ -577,10 +618,14 @@ int main (int argc, char **argv)
                         // store i-th eigenvector of U
                         double* ev = malloc(currNode->n * sizeof(double));
 
-                        #pragma omp for
+                        #pragma omp for private(evtic, evtoc) reduction(+:evsum)
                         for (i = 0; i < nq1+nq2; ++i) {
                             // get i-th eigenvector of U
+                            evtic = omp_get_wtime();
                             getEigenVector(currNode, ev, i);
+                            evtoc = omp_get_wtime();
+                            if (omp_get_thread_num() == 0) // we want to measure the sequential runtime, not the runtime accumulated from each task
+                                evsum += evtoc - evtic;
 
                             Wf[i] = 0;
                             for (j = 0; j < nq1; ++j)
@@ -626,8 +671,11 @@ int main (int argc, char **argv)
 
     toc = omp_get_wtime();
     if (taskid == MASTER) {
+        double elapsedTime = toc-tic;
         printf("\n");
-        printf("Elapsed time in %f seconds\n", toc-tic);
+        printf("Required time to compute all eigenvalues: %f seconds\n", elapsedTime);
+        printf("Required time for root finding: %f seconds; fraction: %.1f%%\n", rsum, 100*rsum/elapsedTime);
+        printf("Required time for eigenvector extraction from U_i's: %f seconds; fraction: %.1f%%\n", evsum, 100*evsum/elapsedTime);
     }
 
     if (writeOutput) {
@@ -642,7 +690,9 @@ int main (int argc, char **argv)
 
     freeEVRepTree(&evTree);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
+    if (taskid == MASTER)
+        printf("\nProgram finished successfully!\n");
     MPI_FINALIZE();
     return 0;
 }
@@ -665,7 +715,7 @@ void showHelp() {
     printf("    The name of a file which contains a tridiagonal matrix in mtx format.\n");
     printf("    The eigenvalues of this matrix will then be computed.\n");
     printf(" -s NUM\n");
-    printf("    If you want to compute the eigenvalues of a predefined matrix, you may.\n");
+    printf("    If you want to compute the eigenvalues of a predefined matrix, you may\n");
     printf("    use this option to define the scheme of the matrix.\n");
     printf("    1 - Matrix will have the tridiagonal form [-1,d_i,-1] where the diagonal\n");
     printf("        elements will be evenly spaced in the interval [1,100] \n");
@@ -677,7 +727,7 @@ void showHelp() {
     printf(" -e(FILENAME)\n");
     printf("    Without this option, no eigenvectors are computed, just the eigenvalues.\n");
     printf("    If you just specify the flag -e, then all eigenvectors will be computed.\n");
-    printf("    If you specify additionally a filename, then he will read the indices\n");
+    printf("    If you specify additionally a filename, then it will read the indices\n");
     printf("    of the eigenvectors to compute from this file (each line one index).\n");
     printf("    Note, there is no blank between the option and the filename.\n");
     printf("\n");
